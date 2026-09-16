@@ -34,6 +34,17 @@ For crypto (BTC) and metals (XAU/XAG) — and the most reliable fiat — provide
 
 Without a key it still fetches fiat from a free, no-key source. The key stays on your machine (used only by the local server, never sent to the browser).
 
+## Data safety
+
+Your personal finances live only in a local, git-ignored `ledger.json` (or your browser). Three guardrails keep them out of the repository:
+
+1. `.gitignore` ignores `ledger.json` and exported backups (`ledgerbook-*.json`, `*.csv`, etc.).
+2. A **pre-commit hook** (`.githooks/pre-commit`) blocks committing any file that looks like a ledger — by name or by content — even with `git add -f`. Enable it once per clone:
+
+       sh setup.sh        # or: git config core.hooksPath .githooks
+
+3. A **CI check** (`.github/workflows/no-financial-data.yml`) fails the build if such a file ever lands in the repo.
+
 ## Files
 
 - `index.html` — the whole app.

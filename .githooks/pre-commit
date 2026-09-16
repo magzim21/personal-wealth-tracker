@@ -1,0 +1,36 @@
+#!/bin/sh
+# Guardrail: keep personal financial data out of git.
+# Blocks any staged file that looks like Ledgerbook data — by filename OR by content.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+bad=""
+for f in $staged; do
+  base=$(basename "$f")
+  case "$base" in
+    ledger.json|*.ledger.json|ledgerbook-*.json|ledgerbook-*.csv|*wealth*.json|*finances*.json)
+      bad="$bad
+  $f  (filename looks like ledger data)"
+      continue ;;
+  esac
+  # app source, docs and repo config are allowed (they legitimately mention these keys)
+  case "$f" in
+    index.html|*.md|*.markdown|.gitignore|setup.sh|.github/*|.githooks/*) continue ;;
+  esac
+  blob=$(git show ":$f" 2>/dev/null)
+  case "$blob" in
+    *'"accounts"'*'"transactions"'*)
+      case "$blob" in
+        *'"typeId"'*|*'"debit"'*|*'"credit"'*)
+          bad="$bad
+  $f  (contents look like a ledger)" ;;
+      esac ;;
+  esac
+done
+
+if [ -n "$bad" ]; then
+  printf '\n\033[31m⛔  COMMIT BLOCKED\033[0m — personal financial data must not enter git:%s\n\nThat data belongs only in a local, git-ignored ledger.json — never in the repository.\nIf this really is not financial data, rename the file (or review it) and commit again.\n\n' "$bad" >&2
+  exit 1
+fi
+exit 0

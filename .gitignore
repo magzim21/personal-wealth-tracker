@@ -1,7 +1,17 @@
-# runtime data file created by the local server
+# ─────────────────────────────────────────────────────────────
+#  Personal financial data must NEVER be committed to this repo.
+#  (Enforced also by .githooks/pre-commit and a CI check.)
+# ─────────────────────────────────────────────────────────────
 ledger.json
-# compiled go binary
+*.ledger.json
+ledgerbook-*.json
+ledgerbook-*.csv
+*wealth*.json
+*finances*.json
+/data/
+backups/
+
+# runtime / build artifacts
 personal-wealth-tracker
 server
-# node
 node_modules/
