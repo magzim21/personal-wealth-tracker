@@ -159,7 +159,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v18", UPDATED="2026-09-16";
+const VERSION="v19", UPDATED="2026-09-16";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -507,7 +507,7 @@ async function downloadLocalBuild(){
     zip.file("README.md", READMEMD);
     const blob=await zip.generateAsync({type:"blob"});
     const c=window.claude; const dl=(c&&c.use)?await c.use("downloads"):null;
-    if(dl){ await dl.save({filename:PROJECT+"_desktop.zip", data:blob}); return; }
+    if(dl){ await dl.save({filename:backupName("desktop.zip"), data:blob}); return; }
     toast("Download isn't available in this view.");
   }catch(err){ if(err&&err.code==="declined") return; toast("Couldn't build the archive."); }
 }
