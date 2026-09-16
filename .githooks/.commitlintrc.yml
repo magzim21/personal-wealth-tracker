@@ -1,4 +1,0 @@
-# possible rules https://github.com/conventional-changelog/commitlint/blob/master/docs/reference-rules.md
----
-extends:
-- "@commitlint/config-conventional"
