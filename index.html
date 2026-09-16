@@ -1,0 +1,893 @@
+<title>Ledgerbook</title>
+<meta name="description" content="A double-entry ledger with a chart of accounts.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --paper:#f3f5f2; --surface:#ffffff; --surface-2:#f7f9f6;
+  --ink:#182420; --muted:#5c6a63; --faint:#8b978f;
+  --line:#e0e6df; --line-strong:#cdd6cc;
+  --accent:#1f6a52; --accent-ink:#12523f; --accent-soft:#e5f0eb;
+  --pos:#1f7a52; --neg:#b23a37;
+  --shadow:0 1px 2px rgba(24,36,32,.06), 0 8px 24px -12px rgba(24,36,32,.18);
+  --shadow-lift:0 12px 40px -12px rgba(24,36,32,.35);
+  --r:10px; --r-sm:7px;
+  --fs-display:"Fraunces",Georgia,serif;
+  --fs-sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --fs-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+:root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){
+  --paper:#0f1513; --surface:#161e1b; --surface-2:#131a17;
+  --ink:#e7efea; --muted:#94a49c; --faint:#6b7a72;
+  --line:#26302c; --line-strong:#33403a;
+  --accent:#4cc298; --accent-ink:#7ad4b3; --accent-soft:#17302690;
+  --pos:#4cc298; --neg:#e08079;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  --shadow-lift:0 16px 48px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0f1513; --surface:#161e1b; --surface-2:#131a17;
+  --ink:#e7efea; --muted:#94a49c; --faint:#6b7a72;
+  --line:#26302c; --line-strong:#33403a;
+  --accent:#4cc298; --accent-ink:#7ad4b3; --accent-soft:#17302690;
+  --pos:#4cc298; --neg:#e08079;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  --shadow-lift:0 16px 48px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--fs-sans);line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-family:var(--fs-display);font-weight:600;letter-spacing:-.01em}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit;color:var(--ink)}
+.num{font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+.app{display:grid;grid-template-columns:224px 1fr;min-height:100dvh}
+.side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:16px;padding:18px 12px;position:sticky;top:0;height:100dvh}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--fs-display);font-weight:600;font-size:17px;flex:none}
+.brand h1{font-size:20px}
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--muted);font-size:14px;font-weight:500;padding:9px 12px;border-radius:var(--r-sm)}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.side-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 2px}
+.curpick{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+.curpick select{font-weight:400;color:var(--ink);width:100%}
+.main{min-width:0;display:flex;flex-direction:column}
+.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:clamp(16px,3vw,26px) clamp(16px,3vw,28px) 0}
+.mainhead h2{font-size:19px}
+.mainhead .grow{flex:1}
+.ver{font-family:var(--fs-mono);font-size:11.5px;color:var(--faint);text-align:right;line-height:1.5}
+.warn-badge{display:inline-block;font-family:var(--fs-sans);font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#f4d774;color:#5c4400;white-space:nowrap}
+.warn-badge.crit{background:var(--neg);color:#fff}
+.content{padding:clamp(16px,3vw,26px);max-width:860px;width:100%}
+
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:8px 13px;font-size:13.5px;font-weight:500}
+.btn:hover{background:var(--surface-2);border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
+.btn.sm{padding:5px 9px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.btn svg{width:16px;height:16px}
+.iconbtn{background:none;border:0;color:var(--faint);padding:6px;border-radius:6px;display:grid;place-items:center}
+.iconbtn:hover{background:var(--surface-2);color:var(--ink)}
+.iconbtn svg{width:16px;height:16px}
+svg{stroke-width:1.7}
+input[type=text],input[type=date],input[type=number],select,textarea{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:7px 10px;font-size:13.5px;width:100%}
+textarea{font-family:inherit;resize:vertical;min-height:44px;line-height:1.4}
+input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+label.field input,label.field select{font-weight:400;color:var(--ink)}
+
+.groupwrap{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.grouphead{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.grouphead h3{font-size:15px}
+.grouphead .total{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--muted)}
+.arow{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:0}
+.typehead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:color-mix(in srgb,var(--surface-2) 60%,transparent);border-bottom:1px solid var(--line)}
+.typehead .tname{flex:1;font-weight:600;font-size:12.5px}
+.typehead .ttotal{color:var(--muted);font-size:12.5px;margin-right:2px}
+.arow.acct{padding-left:28px}
+.arow .name{flex:1}
+.arow .sub{color:var(--faint)}
+.arow .bal .sub{margin-right:8px;font-size:12px}
+.curtag{font-family:var(--fs-mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line-strong);border-radius:4px;padding:0 4px;margin-left:4px}
+.muted{color:var(--muted)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:22px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lift);z-index:200;max-width:90%;text-align:center}
+.rates{display:flex;flex-direction:column;gap:8px}
+.raterow{display:grid;grid-template-columns:70px 14px 1fr 44px;gap:8px;align-items:center}
+.raterow .rc{font-family:var(--fs-mono);font-size:13px;color:var(--muted)}
+.raterow .eq{color:var(--faint);text-align:center}
+.arow .bal{font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+
+.txcard{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.txhead{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.txhead .date{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.txhead .desc{flex:1;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:8px 16px;border-bottom:1px solid var(--line)}
+thead th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;text-align:right}
+tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
+.txnote{padding:10px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;white-space:pre-wrap}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted);background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r)}
+
+.overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
+.modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line)}
+.modal-h h3{font-size:16px}
+.modal-b{padding:18px 20px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lines{display:flex;flex-direction:column;gap:8px}
+.linehead,.line{display:grid;grid-template-columns:1fr 96px 96px 28px;gap:8px;align-items:center}
+.linehead{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
+.linehead .r{text-align:right}
+.balrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r-sm);font-size:13px;background:var(--surface-2)}
+.balrow.ok{background:var(--accent-soft);color:var(--accent-ink)}
+.balrow.bad{background:#f7e7e6;color:var(--neg)}
+:root[data-theme="dark"] .balrow.bad,:root:not([data-theme="light"]) .balrow.bad{background:#33201f}
+
+@media (max-width:640px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .nav{flex-direction:row}
+  .nav button{white-space:nowrap}
+}
+@media (max-width:560px){
+  .linehead,.line{grid-template-columns:1fr 80px 80px 26px}
+  .grid2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app"></div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+"use strict";
+const CLASSES=[["asset","Assets"],["liability","Liabilities"],["equity","Equity"]];  // fixed statement classes
+const DEBIT_NORMAL=new Set(["asset","expense"]);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
+const round4=n=>Math.round(n*1e4)/1e4;
+const KEY="ledgerbook.min.v1";
+const VERSION="v18", UPDATED="2026-09-16";
+// Stamped at each publish to track drift between this artifact and the git repo:
+const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
+const PROJECT="personal-wealth-tracker";
+function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
+  const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  return `${PROJECT}_${ts}_${COMMIT}.${ext}`; }   // sortable: project _ YYYYMMDD-HHMMSS _ commit
+const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
+
+function seed(){
+  const Ty=(name,cls)=>({id:uid(),name,class:cls});
+  const ty={
+    bank:Ty("Bank","asset"), cashT:Ty("Cash","asset"), fixed:Ty("Fixed assets","asset"),
+    curLiab:Ty("Current liabilities","liability"),
+    ownEq:Ty("Owner's equity","equity"),
+  };
+  const types=Object.values(ty);
+  const A=(name,typeObj,currency)=>({id:uid(),name,typeId:typeObj.id,currency:currency||"USD"});
+  const a={
+    checking:A("Checking",ty.bank), savings:A("Savings",ty.bank),
+    cash:A("Cash",ty.cashT), euro:A("Euro cash",ty.cashT,"EUR"),
+    equipment:A("Equipment",ty.fixed),
+    ap:A("Accounts payable",ty.curLiab), loan:A("Loan payable",ty.curLiab),
+    eq:A("Owner's equity",ty.ownEq),
+  };
+  const accounts=Object.values(a);
+  const T=(date,description,lines)=>({id:uid(),date,description,lines:lines.map(([ac,d,c])=>({accountId:ac.id,debit:d||0,credit:c||0}))});
+  const transactions=[
+    T("2026-09-01","Owner funds the business",[[a.checking,5000,0],[a.eq,0,5000]]),
+    T("2026-09-03","Buy equipment",[[a.equipment,1500,0],[a.checking,0,1500]]),
+    T("2026-09-05","Take a short-term loan",[[a.savings,2000,0],[a.loan,0,2000]]),
+    T("2026-09-06","Buy euros",[[a.euro,200,0],[a.checking,0,216]]),  // €200 @ 1.08 = $216
+  ];
+  transactions[1].comment="Laptop and monitor for the office.";
+  return {types,accounts,transactions,settings:{currency:"USD",rates:{USD:1,EUR:1.08,GBP:1.27,JPY:0.0067,CAD:0.73,AUD:0.66},ratesUpdated:""}};
+}
+/* ---- persistence: PORTS & ADAPTERS — one interface { load, save },
+   two backends, chosen ONCE at startup (not a flag inside every call):
+     • browser storage  — in the Claude artifact
+     • local JSON file  — when served by the offline desktop program
+   The rest of the app only ever calls save(); it never knows which store. ---- */
+const LS_STORE={ name:"browser",
+  async load(){ try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch(e){return null;} },
+  async save(d){ try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){} } };
+const FILE_STORE={ name:"file",
+  async load(){ const r=await fetch("/api/book",{cache:"no-store"}); if(!r.ok) return null; const j=await r.json(); return (j&&Array.isArray(j.accounts))?j:null; },
+  async save(d){ try{ await fetch("/api/book",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(d)}); }catch(e){} } };
+let STORE=LS_STORE, saveT=null;
+async function pickStore(){ try{ const r=await fetch("/api/ping",{cache:"no-store"}); if(r.ok) return FILE_STORE; }catch(e){} return LS_STORE; }
+function save(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(STORE&&S) STORE.save(S); },250); }
+
+function migrate(st){
+  if(st && Array.isArray(st.types)) return st; // already Class/Type/Account shape
+  // convert old { accounts:{id,name,type,currency,parentId} } -> classes/types/accounts
+  const old=(st&&st.accounts)||[];
+  const hasKids=id=>old.some(a=>a.parentId===id);
+  const types=[]; const generalOf={};
+  const ensureGeneral=cls=>{ if(!generalOf[cls]){ const t={id:uid(),name:"General",class:cls}; types.push(t); generalOf[cls]=t.id; } return generalOf[cls]; };
+  old.forEach(a=>{ if(hasKids(a.id)) types.push({id:a.id,name:a.name,class:a.type}); }); // a parent account becomes a Type (reuse id)
+  const typeIds=new Set(types.map(t=>t.id));
+  const accounts=[];
+  old.forEach(a=>{
+    if(hasKids(a.id)) return; // became a Type
+    const typeId=(a.parentId&&typeIds.has(a.parentId))?a.parentId:ensureGeneral(a.type);
+    accounts.push({id:a.id,name:a.name,typeId,currency:a.currency||(st.settings&&st.settings.currency)||"USD"});
+  });
+  const accIds=new Set(accounts.map(a=>a.id));
+  const transactions=((st&&st.transactions)||[]).filter(t=>Array.isArray(t.lines)&&t.lines.length&&t.lines.every(l=>accIds.has(l.accountId)));
+  return {types,accounts,transactions,settings:(st&&st.settings)||{currency:"USD"}};
+}
+let S=null;
+const UI={view:"accounts",modal:null};
+function normalizeState(){
+  if(!Array.isArray(S.types)) S.types=[];
+  if(!S.settings) S.settings={currency:"USD"};
+  if(!S.settings.rates) S.settings.rates={USD:1};
+  S.accounts.forEach(a=>{ if(!a.currency) a.currency=S.settings.currency; });                 // pin a fixed currency per account
+  S.accounts.forEach(a=>{ if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
+  if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
+}
+
+const acctById=id=>S.accounts.find(a=>a.id===id);
+const typeById=id=>S.types.find(t=>t.id===id);
+const classOf=acc=>{ const t=acc&&typeById(acc.typeId); return t?t.class:undefined; };
+const typesInClass=cls=>S.types.filter(t=>t.class===cls);
+const accountsInType=tid=>S.accounts.filter(a=>a.typeId===tid);
+function balance(accId){
+  const acc=acctById(accId);if(!acc)return 0;
+  let net=0;
+  for(const t of S.transactions) for(const l of t.lines) if(l.accountId===accId) net+=(l.debit||0)-(l.credit||0);
+  net=round2(net);
+  return DEBIT_NORMAL.has(classOf(acc))?net:-net;
+}
+function typeBalanceBase(tid){ return round2(accountsInType(tid).reduce((s,a)=>s+toBase(balance(a.id),accCur(a)),0)); }
+function classTotalBase(cls){ return round2(typesInClass(cls).reduce((s,t)=>s+typeBalanceBase(t.id),0)); }
+/* ---- currency + conversion ---- */
+const base=()=>S.settings.currency;
+const accCur=a=>(a&&a.currency)?a.currency:base();
+function rateUSD(cur){ const r=S.settings&&S.settings.rates; return r&&r[cur]!=null?r[cur]:1; } // USD value of 1 unit of cur
+function convert(amount,from,to){ if(from===to) return amount; return amount*rateUSD(from)/rateUSD(to); }
+function toBase(amount,cur){ return convert(amount,cur,base()); }
+function money(n,cur){
+  cur=cur||base();
+  try{return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).format(n);}
+  catch(e){return n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" "+cur;}
+}
+function fmt(n,cur){ return n?money(n,cur):""; }
+function fmtBal(n,cur){ return money(n,cur); }
+const I={
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  car:'<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px"><path d="M2 13.4c0-.4.2-.8.6-1l2-1.2 2.1-2.5c.5-.6 1.2-.9 2-.9h6c.8 0 1.6.4 2.1 1l1.7 2.2 2.3.6c.7.2 1.2.8 1.2 1.5v1.3c0 .5-.4.9-.9.9h-1.5a2.5 2.5 0 0 1-4.9 0H9.4a2.5 2.5 0 0 1-4.9 0H2.9c-.5 0-.9-.4-.9-.9z"/><circle cx="6.9" cy="15" r="1.35" fill="var(--accent)"/><circle cx="16.6" cy="15" r="1.35" fill="var(--accent)"/></svg>',
+};
+
+function render(){
+  document.getElementById("app").innerHTML=`
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><div class="mark">${I.car}</div><h1>Ledgerbook</h1></div>
+      <nav class="nav">
+        <button data-action="tab" data-view="accounts" class="${UI.view==="accounts"?"on":""}">Accounts</button>
+        <button data-action="tab" data-view="ledger" class="${UI.view==="ledger"?"on":""}">Ledger</button>
+      </nav>
+      <div class="side-foot">
+        <label class="curpick"><span>Currency</span>
+          <select id="cur-pick">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
+        </label>
+        <button class="btn sm" data-action="open-rates" style="width:100%;margin-top:10px">Exchange rates</button>
+        <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Backup / restore</button>
+        ${STORE!==FILE_STORE?`<button class="btn sm" data-action="download-build" style="width:100%;margin-top:8px">⤓ Desktop app (.zip)</button>`:``}
+      </div>
+    </aside>
+    <div class="main">
+      <div class="mainhead">
+        <h2>${UI.view==="accounts"?"Accounts":"Ledger"}</h2>
+        <div class="grow"></div>
+        <span class="ver">${VERSION} · git ${esc(COMMIT)} · ${UPDATED}${COMMITTED?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${MIGRATION_UNCOMMITTED?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}</span>
+        ${UI.view==="accounts"
+          ? `<button class="btn" data-action="new-acct">${I.plus}Add account</button>`
+          : `<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
+      </div>
+      <div class="content">${UI.view==="accounts"?viewAccounts():viewLedger()}</div>
+    </div>
+  </div>`;
+}
+
+function viewAccounts(){
+  let out="";
+  for(const [ck,cl] of CLASSES){
+    const types=typesInClass(ck).slice().sort((a,b)=>a.name.localeCompare(b.name));
+    if(!types.length) continue;
+    out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="total">${fmtBal(classTotalBase(ck))}</span></div>`;
+    types.forEach(t=>{
+      out+=`<div class="typehead">
+        <span class="tname">${esc(t.name)}</span>
+        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}</span>
+        <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
+        <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
+        <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button>
+      </div>`;
+      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
+      out+=accts.map(a=>{
+        const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
+        const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
+        return `<div class="arow acct">
+          <span class="name">${esc(a.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:''}</span>
+          <span class="bal">${native}${fmtBal(baseBal)}</span>
+          <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
+          <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
+        </div>`;
+      }).join("")||`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No accounts</span><span></span></div>`;
+    });
+    out+=`</div>`;
+  }
+  if(!out) return `<div class="empty">No accounts yet. Use “Add account” to create your first class › type › account.</div>`;
+  return out+`<button class="btn sm" data-action="new-type">${I.plus}Add type</button>`;
+}
+
+function viewLedger(){
+  const txs=[...S.transactions].sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  if(!txs.length) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
+  return txs.map(t=>{
+    const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
+    const crBase=round2(t.lines.reduce((s,l)=>s+toBase(l.credit||0,accCur(acctById(l.accountId))),0));
+    return `<div class="txcard">
+      <div class="txhead">
+        <span class="date">${t.date}</span>
+        <span class="desc">${esc(t.description)}</span>
+        <button class="iconbtn" data-action="edit-tx" data-id="${t.id}" title="Edit">${I.edit}</button>
+        <button class="iconbtn" data-action="del-tx" data-id="${t.id}" title="Delete">${I.trash}</button>
+      </div>
+      <table>
+        <thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+        <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);return `<tr><td>${a?esc(a.name):"—"}${c!==base()?` <span class="curtag">${c}</span>`:''}</td><td class="num">${fmt(l.debit,c)}</td><td class="num">${fmt(l.credit,c)}</td></tr>`;}).join("")}</tbody>
+        <tfoot><tr><td>Total (${base()})</td><td class="num">${fmtBal(drBase)}</td><td class="num">${fmtBal(crBase)}</td></tr></tfoot>
+      </table>
+      ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
+    </div>`;
+  }).join("");
+}
+
+/* ---- in-page dialogs (native alert/confirm are blocked in the sandbox) ---- */
+let toastT=null;
+function toast(msg){ const r=document.getElementById("toast-root"); if(!r) return; r.innerHTML=`<div class="toast">${esc(msg)}</div>`; clearTimeout(toastT); toastT=setTimeout(()=>{r.innerHTML="";},2800); }
+let pendingConfirm=null;
+function askConfirm(message,onYes){ pendingConfirm=onYes; UI.modal={kind:"confirm",message}; renderModal(); }
+
+/* ---- offline desktop build: zip the running app + a tiny local server
+   that persists to ledger.json AND proxies exchange-rate lookups. ---- */
+function buildLocalHTML(){
+  const styleText=[...document.querySelectorAll('style')].map(s=>s.textContent).join("\n");
+  const scriptText=([...document.querySelectorAll('script')].map(s=>s.textContent).filter(t=>t&&t.indexOf("function saveTx")>-1)[0])||"";
+  return "<!doctype html>\n<html lang=\"en\"><head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Ledgerbook</title>\n<style>\n"+styleText+"\n</style>\n</head><body>\n<div id=\"app\"></div>\n<div id=\"modal-root\"></div>\n<div id=\"toast-root\"></div>\n<script>\n"+scriptText+"\n<\/script>\n</body></html>\n";
+}
+const SERVER_GO=[
+ 'package main','',
+ 'import (',
+ '\t"encoding/json"',
+ '\t"fmt"',
+ '\t"io"',
+ '\t"log"',
+ '\t"net/http"',
+ '\t"net/url"',
+ '\t"os"',
+ '\t"strings"',
+ ')','',
+ 'const bookFile = "ledger.json"','',
+ 'func main() {',
+ '\tmux := http.NewServeMux()',
+ '\tmux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })',
+ '\tmux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {',
+ '\t\tswitch r.Method {',
+ '\t\tcase http.MethodGet:',
+ '\t\t\tw.Header().Set("Content-Type", "application/json")',
+ '\t\t\tif data, err := os.ReadFile(bookFile); err == nil { w.Write(data) } else { w.Write([]byte("null")) }',
+ '\t\tcase http.MethodPut:',
+ '\t\t\tbody, err := io.ReadAll(r.Body)',
+ '\t\t\tif err != nil { http.Error(w, "read error", 400); return }',
+ '\t\t\tif err := os.WriteFile(bookFile, body, 0644); err != nil { http.Error(w, "write error", 500); return }',
+ '\t\t\tw.WriteHeader(http.StatusNoContent)',
+ '\t\tdefault:',
+ '\t\t\thttp.Error(w, "method not allowed", 405)',
+ '\t\t}',
+ '\t})',
+ '\tmux.HandleFunc("/api/rates", func(w http.ResponseWriter, r *http.Request) {',
+ '\t\tw.Header().Set("Content-Type", "application/json")',
+ '\t\tsymbol := r.URL.Query().Get("symbol")',
+ '\t\tif key := os.Getenv("TWELVEDATA_API_KEY"); key != "" {',
+ '\t\t\tresp, err := http.Get("https://api.twelvedata.com/exchange_rate?symbol=" + url.QueryEscape(symbol) + "&apikey=" + url.QueryEscape(key))',
+ '\t\t\tif err != nil { http.Error(w, "upstream error", 502); return }',
+ '\t\t\tdefer resp.Body.Close()',
+ '\t\t\tbody, _ := io.ReadAll(resp.Body)',
+ '\t\t\tw.Write(body)',
+ '\t\t\treturn',
+ '\t\t}',
+ '\t\tcur := strings.SplitN(symbol, "/", 2)[0]',
+ '\t\tresp, err := http.Get("https://open.er-api.com/v6/latest/USD")',
+ '\t\tif err != nil { http.Error(w, "upstream error", 502); return }',
+ '\t\tdefer resp.Body.Close()',
+ '\t\tvar data map[string]interface{}',
+ '\t\tjson.NewDecoder(resp.Body).Decode(&data)',
+ '\t\trates, _ := data["rates"].(map[string]interface{})',
+ '\t\tif v, ok := rates[cur].(float64); ok && v != 0 {',
+ '\t\t\tfmt.Fprintf(w, `{"symbol":%q,"rate":%g}`, symbol, 1.0/v)',
+ '\t\t} else {',
+ '\t\t\tw.Write([]byte(`{"rate":0}`))',
+ '\t\t}',
+ '\t})',
+ '\tmux.Handle("/", http.FileServer(http.Dir(".")))',
+ '\taddr := "127.0.0.1:8123"',
+ '\tlog.Printf("Ledgerbook at http://%s  (data file: %s)", addr, bookFile)',
+ '\tlog.Fatal(http.ListenAndServe(addr, mux))',
+ '}',''
+].join("\n");
+const SERVER_MJS=[
+ 'import { createServer } from "http";',
+ 'import { readFile, writeFile } from "fs/promises";',
+ 'const FILE = "ledger.json";',
+ 'createServer(async (req, res) => {',
+ '  if (req.url === "/api/ping") { res.writeHead(200); return res.end("ok"); }',
+ '  if (req.url && req.url.startsWith("/api/rates")) {',
+ '    const u = new URL(req.url, "http://x");',
+ '    const symbol = u.searchParams.get("symbol") || "";',
+ '    const key = process.env.TWELVEDATA_API_KEY;',
+ '    res.setHeader("content-type", "application/json");',
+ '    try {',
+ '      if (key) {',
+ '        const up = await fetch("https://api.twelvedata.com/exchange_rate?symbol=" + encodeURIComponent(symbol) + "&apikey=" + encodeURIComponent(key));',
+ '        res.writeHead(200); return res.end(await up.text());',
+ '      }',
+ '      const cur = symbol.split("/")[0];',
+ '      const up = await fetch("https://open.er-api.com/v6/latest/USD");',
+ '      const j = await up.json();',
+ '      const v = j && j.rates && j.rates[cur];',
+ '      res.writeHead(200); return res.end(JSON.stringify({ symbol, rate: v ? 1 / v : 0 }));',
+ '    } catch { res.writeHead(502); return res.end(JSON.stringify({ rate: 0 })); }',
+ '  }',
+ '  if (req.url === "/api/book") {',
+ '    if (req.method === "GET") {',
+ '      try { const d = await readFile(FILE); res.writeHead(200, {"content-type":"application/json"}); res.end(d); }',
+ '      catch { res.writeHead(200, {"content-type":"application/json"}); res.end("null"); }',
+ '      return;',
+ '    }',
+ '    if (req.method === "PUT") { let b=""; req.on("data",c=>b+=c); req.on("end", async()=>{ await writeFile(FILE,b); res.writeHead(204); res.end(); }); return; }',
+ '  }',
+ '  const p = req.url === "/" ? "/index.html" : req.url;',
+ '  try { const d = await readFile("." + p); const ct = p.endsWith(".html") ? "text/html" : "application/octet-stream"; res.writeHead(200,{"content-type":ct}); res.end(d); }',
+ '  catch { res.writeHead(404); res.end("not found"); }',
+ '}).listen(8123, "127.0.0.1", () => console.log("Ledgerbook at http://127.0.0.1:8123"));',''
+].join("\n");
+const READMEMD=[
+ '# Ledgerbook — desktop build','',
+ 'Runs on your laptop. Your data lives in a plain ledger.json file next to the',
+ 'program (created on first save). The internet is used for ONE thing only:',
+ 'fetching exchange rates when you click "Fetch live rates".','',
+ '## Run with Go','','    go run server.go','',
+ 'then open http://127.0.0.1:8123','',
+ '## Or run with Node','','    node server.mjs','',
+ '## Exchange rates (API key)','',
+ 'For crypto (BTC) and metals (XAU/XAG) — and the most reliable fiat — get a',
+ 'free Twelve Data API key at https://twelvedata.com and start the server with',
+ 'it:','',
+ '    TWELVEDATA_API_KEY=your_key go run server.go',
+ '    # or:  TWELVEDATA_API_KEY=your_key node server.mjs','',
+ 'Without a key, the app still fetches fiat rates from a free, no-key source.',
+ 'The key stays on your machine — only the local server uses it, never the',
+ 'browser.','',
+ '## How it works','',
+ 'Same app as the Claude artifact. One storage interface, two adapters chosen',
+ 'once at startup: browser storage in the artifact, this local JSON file here',
+ '(ports & adapters / hexagonal architecture). The server owns the file',
+ '(GET/PUT /api/book), serves index.html, and proxies rate lookups',
+ '(GET /api/rates). It binds to 127.0.0.1 only, so nothing is exposed to the',
+ 'network.',''
+].join("\n");
+async function downloadLocalBuild(){
+  if(typeof JSZip==="undefined"){ toast("Packaging tool not loaded yet — try again in a moment."); return; }
+  toast("Packaging desktop build…");
+  try{
+    const zip=new JSZip();
+    zip.file("index.html", buildLocalHTML());
+    zip.file("server.go", SERVER_GO);
+    zip.file("server.mjs", SERVER_MJS);
+    zip.file("README.md", READMEMD);
+    const blob=await zip.generateAsync({type:"blob"});
+    const c=window.claude; const dl=(c&&c.use)?await c.use("downloads"):null;
+    if(dl){ await dl.save({filename:PROJECT+"_desktop.zip", data:blob}); return; }
+    toast("Download isn't available in this view.");
+  }catch(err){ if(err&&err.code==="declined") return; toast("Couldn't build the archive."); }
+}
+
+/* ---- backup / restore ---- */
+async function saveFile(filename,data){
+  try{
+    const c=window.claude; const dl=(c&&c.use)?await c.use("downloads"):null;
+    if(dl){ await dl.save({filename,data}); return; }
+  }catch(err){ if(err&&err.code==="declined") return; }
+  // fallback (no downloads capability, e.g. run locally): show text to copy
+  const box=document.getElementById("io-out");
+  if(box){ box.style.display="block"; box.value=data; box.focus(); box.select(); }
+  else { toast("Couldn't save the file here."); }
+}
+async function doExportJSON(){
+  await saveFile(backupName("json"), JSON.stringify(S,null,2));
+}
+function csvCell(v){ v=String(v==null?"":v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+async function doExportCSV(){
+  const rows=[["date","description","account","currency","debit","credit","comment"]];
+  [...S.transactions].sort((a,b)=>a.date<b.date?-1:1).forEach(t=>t.lines.forEach(l=>{
+    const a=acctById(l.accountId);
+    rows.push([t.date,t.description,a?a.name:"?",a?accCur(a):base(),l.debit||0,l.credit||0,t.comment||""]);
+  }));
+  await saveFile(backupName("ledger.csv"), rows.map(r=>r.map(csvCell).join(",")).join("\n"));
+}
+function doImport(text){
+  let obj; try{ obj=JSON.parse(text); }catch(e){ toast("That doesn't look like valid JSON."); return; }
+  if(!obj||!Array.isArray(obj.accounts)||!Array.isArray(obj.transactions)){ toast("Not a Ledgerbook backup (needs accounts and transactions)."); return; }
+  askConfirm("Replace ALL current data with the imported file? This can't be undone.", ()=>{
+    S = Array.isArray(obj.types)
+      ? {types:obj.types,accounts:obj.accounts,transactions:obj.transactions,settings:obj.settings}
+      : migrate(obj);   // accept older single-level backups too
+    if(!S.settings||!S.settings.currency) S.settings={currency:"USD",rates:{USD:1}};
+    if(!S.settings.rates) S.settings.rates={USD:1};
+    if(!Array.isArray(S.types)) S.types=[];
+    S.accounts.forEach(a=>{ if(!a.currency) a.currency=S.settings.currency; if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
+    if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
+    save(); render(); toast("Book imported.");
+  });
+}
+
+/* ---- account modal ---- */
+function acctModal(existing,presetTypeId){
+  let draft;
+  if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset"}; }
+  else { const pt=presetTypeId?typeById(presetTypeId):null; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:(pt&&pt.class)||"asset"}; }
+  UI.modal={kind:"acct",id:existing?existing.id:null,draft};
+  renderModal();
+}
+/* ---- transaction modal ---- */
+function txModal(existing){
+  const t=existing||{date:new Date().toISOString().slice(0,10),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
+  UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
+  renderModal();
+}
+function acctOptions(sel){
+  // only detail accounts are selectable — a class or type can never be posted to
+  let out=`<option value="">— account —</option>`;
+  for(const [ck,cl] of CLASSES){
+    typesInClass(ck).slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
+      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
+      if(!accts.length) return;
+      out+=`<optgroup label="${esc(cl)} · ${esc(t.name)}">`;
+      accts.forEach(a=>{ out+=`<option value="${a.id}" ${sel===a.id?"selected":""}>${esc(a.name)}</option>`; });
+      out+=`</optgroup>`;
+    });
+  }
+  return out;
+}
+function renderModal(){
+  const root=document.getElementById("modal-root");
+  if(!UI.modal){root.innerHTML="";return;}
+  if(UI.modal.kind==="acct"){
+    const a=UI.modal.draft;
+    const typeOpts=cls=>{ const list=typesInClass(cls).slice().sort((x,y)=>x.name.localeCompare(y.name)); return `<option value="">${list.length?"— choose type —":"— none yet —"}</option>`+list.map(t=>`<option value="${t.id}" ${a.typeId===t.id?"selected":""}>${esc(t.name)}</option>`).join("")+`<option value="__new" ${a.typeId==="__new"?"selected":""}>+ New type…</option>`; };
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:430px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>${UI.modal.id?"Edit account":"Add account"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <label class="field"><span>Name</span><input type="text" id="ac-name" value="${escAttr(a.name)}" placeholder="e.g. Checking"></label>
+        <div class="grid2">
+          <label class="field"><span>Class</span><select id="ac-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${a.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>
+          <label class="field"><span>Type</span><select id="ac-type">${typeOpts(a.cls)}</select></label>
+        </div>
+        <label class="field" id="ac-newtype-wrap" style="${a.typeId==="__new"?"":"display:none"}"><span>New type name</span><input type="text" id="ac-newtype" placeholder="e.g. Bank"></label>
+        <label class="field"><span>Currency</span><select id="ac-cur">${CURRENCIES.map(c=>`<option value="${c}" ${a.currency===c?"selected":""}>${c}</option>`).join("")}</select></label>
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-acct">Save</button></div>
+    </div></div>`;
+    const cs=document.getElementById("ac-class"), tsel=document.getElementById("ac-type");
+    cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; });
+    tsel.addEventListener("change",()=>{ a.typeId=tsel.value; document.getElementById("ac-newtype-wrap").style.display=(tsel.value==="__new")?"":"none"; });
+    setTimeout(()=>document.getElementById("ac-name")?.focus(),30);
+  } else if(UI.modal.kind==="type"){
+    const t=UI.modal.draft;
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:400px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>${UI.modal.id?"Rename type":"Add type"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <label class="field"><span>Type name</span><input type="text" id="ty-name" value="${escAttr(t.name)}" placeholder="e.g. Bank"></label>
+        ${UI.modal.id?"":`<label class="field"><span>Class</span><select id="ty-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${t.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>`}
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-type">Save</button></div>
+    </div></div>`;
+    setTimeout(()=>document.getElementById("ty-name")?.focus(),30);
+  } else if(UI.modal.kind==="rates"){
+    const rates=S.settings.rates;
+    const curs=[...new Set(["USD",base(),...S.accounts.map(a=>accCur(a)),...Object.keys(rates)])].sort();
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:470px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>Exchange rates</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn sm" data-action="fetch-rates">Fetch live rates</button>
+          <span class="muted" style="font-size:12px">${esc(UI.rateStatus||(S.settings.ratesUpdated?("updated "+S.settings.ratesUpdated):"value of 1 unit, in USD"))}</span>
+        </div>
+        <div class="rates">
+          ${curs.map(c=>`<div class="raterow"><span class="rc">1 ${c}</span><span class="eq">=</span>${c==="USD"?`<input type="number" value="1" disabled>`:`<input type="number" step="0.0001" data-rate="${c}" value="${rates[c]!=null?rates[c]:1}">`}<span class="rc">USD</span></div>`).join("")}
+        </div>
+        <p class="muted" style="font-size:12px;margin:0">Rates are the USD value of 1 unit. <b>Fetch live rates</b> pulls current prices from your connected Twelve Data connector — fiat, crypto (BTC), and metals (XAU/XAG). You can also edit any rate by hand.</p>
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
+    </div></div>`;
+  } else if(UI.modal.kind==="data"){
+    const eb='font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px';
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:480px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>Backup &amp; restore</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <div>
+          <div style="${eb}">Export</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm" data-action="export-json">Full backup (JSON)</button>
+            <button class="btn sm" data-action="export-csv">Ledger (CSV)</button>
+          </div>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">JSON restores everything exactly. CSV is for spreadsheets — it can't be re-imported as a full book.</p>
+        </div>
+        <div>
+          <div style="${eb}">Import</div>
+          <label class="btn sm" style="position:relative;overflow:hidden">Choose JSON file…<input type="file" id="import-file" accept=".json,application/json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+          <textarea id="import-text" rows="4" placeholder="…or paste backup JSON here" style="margin-top:8px"></textarea>
+          <button class="btn sm" data-action="import-paste" style="margin-top:8px">Import pasted JSON</button>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Importing replaces all current data.</p>
+        </div>
+        ${STORE!==FILE_STORE?`<div>
+          <div style="${eb}">Offline desktop build</div>
+          <button class="btn sm" data-action="download-build">Download desktop build (.zip)</button>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">A ready-to-run copy of this app plus a tiny Go / Node server, storing data in a local <b>ledger.json</b> file. Runs on your laptop with no internet.</p>
+        </div>`:``}
+        <textarea id="io-out" rows="5" readonly style="display:none" placeholder="Backup text"></textarea>
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
+    </div></div>`;
+  } else if(UI.modal.kind==="confirm"){
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:380px" role="dialog" aria-modal="true">
+      <div class="modal-b" style="padding-top:22px"><p style="margin:0;font-size:14px;line-height:1.5">${esc(UI.modal.message)}</p></div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="confirm-yes">Confirm</button></div>
+    </div></div>`;
+  } else {
+    const d=UI.modal.draft;
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>${UI.modal.id?"Edit transaction":"New transaction"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <div class="grid2">
+          <label class="field"><span>Date</span><input type="date" id="tx-date" value="${d.date}"></label>
+          <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="e.g. Cash sale"></label>
+        </div>
+        <div>
+          <div class="linehead"><span>Account</span><span class="r">Debit</span><span class="r">Credit</span><span></span></div>
+          <div class="lines" id="lines">${d.lines.map((l,i)=>lineRow(l,i)).join("")}</div>
+          <button class="btn sm" data-action="add-line" style="margin-top:8px">${I.plus}Add line</button>
+        </div>
+        <div class="balrow" id="balrow"></div>
+        <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="tx-comment" rows="2" placeholder="Notes about this entry">${esc(d.comment||"")}</textarea></label>
+      </div>
+      <div class="modal-f">${UI.modal.id?`<button class="btn" data-action="del-tx-modal" style="color:var(--neg)">${I.trash}Delete</button>`:""}<div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-tx" id="save-tx">Save</button></div>
+    </div></div>`;
+    document.querySelectorAll("[data-line]").forEach(el=>{el.addEventListener("input",syncLines);el.addEventListener("change",syncLines);});
+    updateBal();
+  }
+}
+function lineRow(l,i){
+  return `<div class="line" data-i="${i}">
+    <select data-line="acct" data-i="${i}">${acctOptions(l.accountId)}</select>
+    <input type="number" step="0.01" data-line="debit" data-i="${i}" value="${l.debit||""}" placeholder="0.00">
+    <input type="number" step="0.01" data-line="credit" data-i="${i}" value="${l.credit||""}" placeholder="0.00">
+    <button class="iconbtn" data-action="rm-line" data-i="${i}">${I.x}</button>
+  </div>`;
+}
+function syncLines(){
+  const d=UI.modal.draft;
+  d.date=document.getElementById("tx-date").value;
+  d.description=document.getElementById("tx-desc").value;
+  const cm=document.getElementById("tx-comment"); if(cm) d.comment=cm.value;
+  document.querySelectorAll("#lines .line").forEach(row=>{
+    const i=+row.dataset.i;
+    d.lines[i].accountId=row.querySelector("[data-line=acct]").value;
+    d.lines[i].debit=parseFloat(row.querySelector("[data-line=debit]").value)||0;
+    d.lines[i].credit=parseFloat(row.querySelector("[data-line=credit]").value)||0;
+  });
+  updateBal();
+}
+function updateBal(){
+  const d=UI.modal.draft;
+  let dr=0,cr=0;
+  d.lines.forEach(l=>{const a=acctById(l.accountId);const c=a?accCur(a):base();dr+=toBase(l.debit||0,c);cr+=toBase(l.credit||0,c);});
+  dr=round2(dr);cr=round2(cr);
+  const diff=round2(dr-cr);
+  const tol=Math.max(0.01,0.005*Math.max(dr,cr)); // absorb cross-currency rate rounding
+  const ok=Math.abs(diff)<=tol && dr>0;
+  const row=document.getElementById("balrow");
+  row.className="balrow "+(ok?"ok":(dr||cr?"bad":""));
+  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span>${ok?"✓ Balanced":(dr||cr?"Off by "+fmtBal(Math.abs(diff)):"Enter amounts")}</span>`;
+  const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
+}
+
+/* ---- actions ---- */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-action]"); if(!el) return;
+  const a=el.dataset.action, id=el.dataset.id;
+  switch(a){
+    case "tab": UI.view=el.dataset.view; render(); break;
+    case "new-acct": acctModal(null); break;
+    case "add-acct-in": acctModal(null, id); break;
+    case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset"}}; renderModal(); break;
+    case "edit-type": { const t=typeById(id); if(t){ UI.modal={kind:"type",id,draft:{name:t.name,cls:t.class}}; renderModal(); } break; }
+    case "del-type": { const tid=id; if(accountsInType(tid).length){ toast("This type has accounts — move or delete them first."); } else askConfirm("Delete this type?", ()=>{ S.types=S.types.filter(t=>t.id!==tid); save(); render(); }); break; }
+    case "save-type": saveType(); break;
+    case "edit-acct": acctModal(acctById(id)); break;
+    case "del-acct": delAccount(id); break;
+    case "new-tx": txModal(null); break;
+    case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
+    case "fetch-rates": fetchRates(); break;
+    case "open-data": UI.modal={kind:"data"}; renderModal(); break;
+    case "export-json": doExportJSON(); break;
+    case "export-csv": doExportCSV(); break;
+    case "import-paste": doImport(document.getElementById("import-text").value); break;
+    case "download-build": downloadLocalBuild(); break;
+    case "edit-tx": txModal(S.transactions.find(t=>t.id===id)); break;
+    case "del-tx": { const did=id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
+    case "close": pendingConfirm=null; UI.modal=null; renderModal(); break;
+    case "overlay": if(e.target===el){ pendingConfirm=null; UI.modal=null; renderModal(); } break;
+    case "confirm-yes": { const fn=pendingConfirm; pendingConfirm=null; UI.modal=null; renderModal(); if(fn){ try{ fn(); }catch(err){} } break; }
+    case "save-acct": saveAcct(); break;
+    case "add-line": syncLines(); UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "save-tx": saveTx(); break;
+    case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
+  }
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&UI.modal){pendingConfirm=null;UI.modal=null;renderModal();}});
+document.addEventListener("change",e=>{
+  const el=e.target.closest("#cur-pick");
+  if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
+  const r=e.target.closest("[data-rate]");
+  if(r){ const c=r.dataset.rate, v=parseFloat(r.value); if(!isNaN(v)&&v>0){ S.settings.rates[c]=v; save(); render(); } return; }
+  const imp=e.target.closest("#import-file");
+  if(imp&&imp.files&&imp.files[0]){ const rd=new FileReader(); rd.onload=()=>doImport(rd.result); rd.readAsText(imp.files[0]); return; }
+});
+const TD_SERVER="Twelve Data";
+function parseRate(res){
+  // currency_conversion returns text like: "symbol;rate;timestamp\nEUR/USD;1.14787;169...\n"
+  let text = (res&&typeof res.payload==="string") ? res.payload
+           : (res&&res.content&&res.content[0]&&res.content[0].text) ? res.content[0].text
+           : (res&&res.payload&&typeof res.payload==="object") ? "" : "";
+  for(const ln of String(text).trim().split("\n")){
+    const p=ln.split(";"); if(p.length>=2 && p[0].indexOf("/")>-1){ const v=parseFloat(p[1]); if(!isNaN(v)&&v>0) return v; }
+  }
+  if(res&&res.payload&&typeof res.payload==="object"&&res.payload.rate){ const v=parseFloat(res.payload.rate); if(!isNaN(v)) return v; }
+  return 0;
+}
+function rateErrMsg(code){
+  switch(code){
+    case "needs_reauth": return "Twelve Data needs reconnecting — claude.ai Settings → Connectors, then retry.";
+    case "server_not_connected": return "Add the Twelve Data connector in claude.ai Settings → Connectors.";
+    case "selection_required": return "Pick the Twelve Data connector when prompted, then retry.";
+    case "server_unavailable": return "Twelve Data is briefly unavailable — try again shortly.";
+    default: return "Couldn't update rates ("+(code||"error")+"). Edit rates below.";
+  }
+}
+async function fetchRates(){
+  UI.rateStatus="Fetching…"; renderModal();
+  const targets=Object.keys(S.settings.rates).filter(c=>c!=="USD");
+  const c=window.claude; let mcp=null;
+  try{ mcp = (c&&c.use) ? await c.use("mcp") : null; }catch(e){ mcp=null; }
+  if(mcp){
+    let ok=0, fail=0, stop="";
+    for(const cur of targets){
+      try{
+        const res=await mcp.callTool(TD_SERVER,"currency_conversion",{symbol:cur+"/USD"});
+        const rate=parseRate(res);
+        if(rate>0){ S.settings.rates[cur]=round4(rate); ok++; } else fail++;
+      }catch(err){
+        fail++; const code=err&&err.code;
+        if(code==="needs_reauth"||code==="server_not_connected"||code==="selection_required"){ stop=code; break; }
+      }
+    }
+    S.settings.rates.USD=1;
+    if(ok) S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    UI.rateStatus = stop ? rateErrMsg(stop)
+      : ok ? `Updated ${ok} rate${ok>1?"s":""} from Twelve Data ✓${fail?` — ${fail} not found`:""}`
+      : "No rates returned. Check the currency codes, or edit rates below.";
+    save(); renderModal(); render(); return;
+  }
+  // Desktop build: pull rates through the local server, which proxies Twelve Data with your
+  // API key (fiat + crypto + metals) and falls back to a free no-key fiat source when no key is set.
+  if(STORE===FILE_STORE){
+    let ok=0, fail=0;
+    for(const cur of targets){
+      try{
+        const r=await fetch("/api/rates?symbol="+encodeURIComponent(cur+"/USD"),{cache:"no-store"});
+        const j=await r.json(); const v=parseFloat(j&&j.rate);
+        if(v>0){ S.settings.rates[cur]=round4(v); ok++; } else fail++;
+      }catch(e){ fail++; }
+    }
+    S.settings.rates.USD=1;
+    if(ok) S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    UI.rateStatus = ok ? `Updated ${ok} rate${ok>1?"s":""} ✓${fail?` — ${fail} not found (crypto/metals need TWELVEDATA_API_KEY on the server)`:""}`
+                       : "No rates — check the app is online. Crypto/metals need TWELVEDATA_API_KEY on the server.";
+    save(); renderModal(); render(); return;
+  }
+  // Plain browser without a connector: try the free, no-key fiat source directly.
+  try{
+    const res=await fetch("https://open.er-api.com/v6/latest/USD",{cache:"no-store"});
+    if(!res.ok) throw 0; const j=await res.json(); if(!j||!j.rates) throw 0;
+    let ok=0; targets.forEach(cur=>{ if(j.rates[cur]){ S.settings.rates[cur]=round4(1/j.rates[cur]); ok++; } });
+    S.settings.rates.USD=1; S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    UI.rateStatus = ok?`Updated ${ok} fiat rate${ok>1?"s":""} ✓`:"No rates returned. Edit rates below.";
+  }catch(err){ UI.rateStatus="No rate source in this view. Edit rates below."; }
+  save(); renderModal(); render();
+}
+
+function saveAcct(){
+  const name=document.getElementById("ac-name").value.trim();
+  if(!name){ toast("Give the account a name."); return; }
+  const cls=document.getElementById("ac-class").value;
+  let typeId=document.getElementById("ac-type").value;
+  const currency=document.getElementById("ac-cur").value;
+  if(typeId==="__new"){
+    const tn=document.getElementById("ac-newtype").value.trim();
+    if(!tn){ toast("Name the new type."); return; }
+    const t={id:uid(),name:tn,class:cls}; S.types.push(t); typeId=t.id;
+  }
+  if(!typeId){ toast("Choose a type for the account."); return; }
+  if(S.settings.rates[currency]==null) S.settings.rates[currency]=1;
+  if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; }
+  else S.accounts.push({id:uid(),name,typeId,currency});
+  UI.modal=null;save();renderModal();render();
+}
+function delAccount(id){
+  if(S.transactions.some(t=>t.lines.some(l=>l.accountId===id))){ toast("This account is used in the ledger — remove those entries first."); return; }
+  askConfirm("Delete this account?", ()=>{ S.accounts=S.accounts.filter(a=>a.id!==id); save(); render(); });
+}
+function saveType(){
+  const name=document.getElementById("ty-name").value.trim();
+  if(!name){ toast("Name the type."); return; }
+  if(UI.modal.id){ const t=typeById(UI.modal.id); if(t) t.name=name; }
+  else { const cls=document.getElementById("ty-class").value; S.types.push({id:uid(),name,class:cls}); }
+  UI.modal=null; save(); renderModal(); render();
+}
+function saveTx(){
+  syncLines();
+  const d=UI.modal.draft;
+  const lines=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0)));
+  if(lines.length<2){ toast("A transaction needs at least two lines."); return; }
+  const tx={id:UI.modal.id||uid(),date:d.date,description:(d.description||"").trim()||"(no description)",lines:lines.map(l=>({accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0)}))};
+  if((d.comment||"").trim()) tx.comment=d.comment.trim();
+  if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id);S.transactions[idx]=tx;}
+  else S.transactions.push(tx);
+  UI.modal=null;save();renderModal();render();
+}
+
+function esc(s){return String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function escAttr(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+window.addEventListener("beforeunload",()=>{ try{ if(STORE&&S) STORE.save(S); }catch(e){} });
+(async function boot(){
+  STORE = await pickStore();                       // composition root: choose the adapter once
+  let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
+  S = loaded ? migrate(loaded) : seed();
+  normalizeState();
+  STORE.save(S);
+  render();
+})();
+</script>
