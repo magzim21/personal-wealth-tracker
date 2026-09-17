@@ -67,6 +67,17 @@ input,select{font-family:inherit;color:var(--ink)}
 .ver{font-family:var(--fs-mono);font-size:11.5px;color:var(--faint);text-align:right;line-height:1.5}
 .warn-badge{display:inline-block;font-family:var(--fs-sans);font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#f4d774;color:#5c4400;white-space:nowrap}
 .warn-badge.crit{background:var(--neg);color:#fff}
+.warnbanner{margin:14px clamp(16px,3vw,28px) 0;border:1px solid #e6c65a;border-radius:var(--r-sm);overflow:hidden;box-shadow:var(--shadow)}
+.wbrow{background:#fbeec2;color:#5c4400;padding:9px 14px;font-size:12.5px;line-height:1.45}
+.wbrow.crit{background:#f6dcda;color:#8a2b28;border-top:1px solid #e6b4b0}
+:root[data-theme="dark"] .warnbanner{border-color:#6b5a1f}
+:root[data-theme="dark"] .wbrow{background:#3a3113;color:#f4d774}
+:root[data-theme="dark"] .wbrow.crit{background:#3a1f1e;color:#e08079;border-top-color:#5c2f2c}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .warnbanner{border-color:#6b5a1f}
+  :root:not([data-theme="light"]) .wbrow{background:#3a3113;color:#f4d774}
+  :root:not([data-theme="light"]) .wbrow.crit{background:#3a1f1e;color:#e08079;border-top-color:#5c2f2c}
+}
 .content{padding:clamp(16px,3vw,26px);max-width:860px;width:100%}
 
 .btn{display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:8px 13px;font-size:13.5px;font-weight:500}
@@ -165,7 +176,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v25", UPDATED="2026-09-17";
+const VERSION="v26", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -317,11 +328,29 @@ function render(){
           ? `<button class="btn" data-action="new-acct">${I.plus}Add account</button>`
           : `<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
       </div>
+      ${warnBanner()}
       <div class="content">${UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
   </div>`;
 }
 
+/* ---- explicit commit/migration warning banner (top of the main pane) ----
+   COMMITTED / MIGRATION_UNCOMMITTED are stamped by hand at each publish.
+   If the code is ahead of git, show a DOUBLE warning: (1) uncommitted code,
+   and (2) that any data-shape change made since the last commit is an
+   unversioned "dead" migration that can rewrite the ledger. ---- */
+function warnBanner(){
+  if(COMMITTED && !MIGRATION_UNCOMMITTED) return "";
+  let rows="";
+  if(!COMMITTED){
+    rows+=`<div class="wbrow"><b>⚠ Uncommitted changes.</b> The code running here is ahead of the last commit (git ${esc(COMMIT)}). Treat this as a draft, not prod.</div>`;
+    rows+=`<div class="wbrow crit"><b>⛔ Possible dead migration.</b> Any change to the data shape made after ${esc(COMMIT)} is unversioned — it can rewrite <b>ledger.json</b> with no matching commit. Export a JSON backup before you keep editing.</div>`;
+  }
+  if(MIGRATION_UNCOMMITTED){
+    rows+=`<div class="wbrow crit"><b>⛔ Uncommitted data migration.</b> A migration ran after the last commit. Back up and commit before continuing.</div>`;
+  }
+  return `<div class="warnbanner" role="alert">${rows}</div>`;
+}
 function viewAccounts(){
   let out="";
   for(const [ck,cl] of CLASSES){
