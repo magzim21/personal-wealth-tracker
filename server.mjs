@@ -1,18 +1,95 @@
+// Ledgerbook local server (Node, zero dependencies).
+// Serves index.html and owns the data file. The internet is touched only to
+// proxy exchange-rate lookups when you ask for them.
+//
+// Storage resolves in this order (documented as "fallback paths"):
+//   ledger  : $LEDGER_PATH  ->  config.json ledgerPath  ->  ./ledger.json (if present)  ->  iCloud Drive
+//   snapshot: $SNAPSHOT_DIR ->  config.json snapshotDir ->  <ledger dir>/snapshots
+// A snapshot is written on every save (deduped; newest SNAP_KEEP retained).
 import { createServer } from "http";
-import { readFile, writeFile } from "fs/promises";
-const FILE = "ledger.json";
+import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
+import { existsSync } from "fs";
+import { homedir } from "os";
+import { dirname, join } from "path";
+import { execSync } from "child_process";
+
+const PROJECT = "personal-wealth-tracker";
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
+const SNAP_KEEP = 300;
+const CONFIG_DIR = join(homedir(), "Library", "Application Support", "PersonalWealthTracker");
+const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const ICLOUD_DIR = join(homedir(), "Library", "Mobile Documents", "com~apple~CloudDocs", "PersonalWealthTracker");
+const HOME_DIR = join(homedir(), "PersonalWealthTracker");
+
+async function loadConfig() { try { return JSON.parse(await readFile(CONFIG_FILE, "utf8")); } catch { return {}; } }
+async function saveConfig(c) { await mkdir(CONFIG_DIR, { recursive: true }); await writeFile(CONFIG_FILE, JSON.stringify(c, null, 2)); }
+
+function resolveLedger(c) {
+  if (process.env.LEDGER_PATH) return process.env.LEDGER_PATH;
+  if (c.ledgerPath) return c.ledgerPath;
+  if (existsSync(join(process.cwd(), "ledger.json"))) return join(process.cwd(), "ledger.json");
+  return join(ICLOUD_DIR, "ledger.json");
+}
+function resolveSnapDir(c, ledger) {
+  if (process.env.SNAPSHOT_DIR) return process.env.SNAPSHOT_DIR;
+  if (c.snapshotDir) return c.snapshotDir;
+  return join(dirname(ledger), "snapshots");
+}
+
+let cfg = await loadConfig();
+let LEDGER = resolveLedger(cfg);
+let SNAPDIR = resolveSnapDir(cfg, LEDGER);
+
+const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
+
+async function writeSnapshot(body) {
+  try {
+    await mkdir(SNAPDIR, { recursive: true });
+    const list = () => readdir(SNAPDIR).then((fs) => fs.filter((f) => f.startsWith(PROJECT + "_") && f.endsWith(".json")).sort());
+    const before = await list();
+    if (before.length) { const last = await readFile(join(SNAPDIR, before[before.length - 1]), "utf8").catch(() => null); if (last === body) return; }
+    await writeFile(join(SNAPDIR, `${PROJECT}_${stamp()}.json`), body);
+    const after = await list();
+    for (const f of after.slice(0, Math.max(0, after.length - SNAP_KEEP))) await unlink(join(SNAPDIR, f)).catch(() => {});
+  } catch { /* a snapshot failure must never block a save */ }
+}
+
+const body = (req) => new Promise((r) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => r(b)); });
+const json = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+
 createServer(async (req, res) => {
-  if (req.url === "/api/ping") { res.writeHead(200); return res.end("ok"); }
-  if (req.url && req.url.startsWith("/api/rates")) {
-    const u = new URL(req.url, "http://x");
+  const u = new URL(req.url, "http://x");
+
+  if (u.pathname === "/api/ping") { res.writeHead(200); return res.end("ok"); }
+
+  if (u.pathname === "/api/version") {
+    const git = (c) => { try { return execSync("git " + c, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; } };
+    if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { isRepo: false });
+    return json(res, 200, { isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), dirty: git("status --porcelain") !== "" });
+  }
+
+  if (u.pathname === "/api/location") {
+    if (req.method === "GET")
+      return json(res, 200, { ledgerPath: LEDGER, snapshotDir: SNAPDIR, ledgerExists: existsSync(LEDGER),
+        defaults: { icloud: join(ICLOUD_DIR, "ledger.json"), home: join(HOME_DIR, "ledger.json"), cwd: join(process.cwd(), "ledger.json") } });
+    if (req.method === "PUT") {
+      let o = {}; try { o = JSON.parse(await body(req)); } catch {}
+      if (o.ledgerPath !== undefined) { if (!String(o.ledgerPath).startsWith("/")) return json(res, 400, { error: "ledgerPath must be an absolute path" }); LEDGER = o.ledgerPath;
+        if (o.snapshotDir === undefined && !process.env.SNAPSHOT_DIR && !cfg.snapshotDir) SNAPDIR = join(dirname(LEDGER), "snapshots"); }
+      if (o.snapshotDir !== undefined) { if (!String(o.snapshotDir).startsWith("/")) return json(res, 400, { error: "snapshotDir must be an absolute path" }); SNAPDIR = o.snapshotDir; }
+      cfg = { ...cfg, ledgerPath: LEDGER, snapshotDir: SNAPDIR };
+      try { await saveConfig(cfg); await mkdir(dirname(LEDGER), { recursive: true }); } catch (e) { return json(res, 500, { error: String(e) }); }
+      return json(res, 200, { ledgerPath: LEDGER, snapshotDir: SNAPDIR, ledgerExists: existsSync(LEDGER) });
+    }
+  }
+
+  if (u.pathname === "/api/rates") {
     const symbol = u.searchParams.get("symbol") || "";
     const key = process.env.TWELVEDATA_API_KEY;
     res.setHeader("content-type", "application/json");
     try {
-      if (key) {
-        const up = await fetch("https://api.twelvedata.com/exchange_rate?symbol=" + encodeURIComponent(symbol) + "&apikey=" + encodeURIComponent(key));
-        res.writeHead(200); return res.end(await up.text());
-      }
+      if (key) { const up = await fetch("https://api.twelvedata.com/exchange_rate?symbol=" + encodeURIComponent(symbol) + "&apikey=" + encodeURIComponent(key)); res.writeHead(200); return res.end(await up.text()); }
       const cur = symbol.split("/")[0];
       const up = await fetch("https://open.er-api.com/v6/latest/USD");
       const j = await up.json();
@@ -20,15 +97,26 @@ createServer(async (req, res) => {
       res.writeHead(200); return res.end(JSON.stringify({ symbol, rate: v ? 1 / v : 0 }));
     } catch { res.writeHead(502); return res.end(JSON.stringify({ rate: 0 })); }
   }
-  if (req.url === "/api/book") {
+
+  if (u.pathname === "/api/book") {
     if (req.method === "GET") {
-      try { const d = await readFile(FILE); res.writeHead(200, {"content-type":"application/json"}); res.end(d); }
-      catch { res.writeHead(200, {"content-type":"application/json"}); res.end("null"); }
+      try { const d = await readFile(LEDGER); res.writeHead(200, { "content-type": "application/json" }); res.end(d); }
+      catch { res.writeHead(200, { "content-type": "application/json" }); res.end("null"); }
       return;
     }
-    if (req.method === "PUT") { let b=""; req.on("data",c=>b+=c); req.on("end", async()=>{ await writeFile(FILE,b); res.writeHead(204); res.end(); }); return; }
+    if (req.method === "PUT") {
+      const b = await body(req);
+      try { await mkdir(dirname(LEDGER), { recursive: true }); await writeFile(LEDGER, b); } catch (e) { res.writeHead(500); return res.end(String(e)); }
+      writeSnapshot(b);
+      res.writeHead(204); return res.end();
+    }
   }
-  const p = req.url === "/" ? "/index.html" : req.url;
-  try { const d = await readFile("." + p); const ct = p.endsWith(".html") ? "text/html" : "application/octet-stream"; res.writeHead(200,{"content-type":ct}); res.end(d); }
-  catch { res.writeHead(404); res.end("not found"); }
-}).listen(8123, "127.0.0.1", () => console.log("Ledgerbook at http://127.0.0.1:8123"));
+
+  const p = u.pathname === "/" ? "/index.html" : u.pathname;
+  try {
+    const d = await readFile("." + p);
+    const ct = p.endsWith(".html") ? "text/html; charset=utf-8" : (p.endsWith(".mjs") || p.endsWith(".js")) ? "text/javascript" : "application/octet-stream";
+    res.writeHead(200, { "content-type": ct, "cache-control": "no-store" });
+    res.end(d);
+  } catch { res.writeHead(404); res.end("not found"); }
+}).listen(PORT, "127.0.0.1", () => console.log(`Ledgerbook → http://127.0.0.1:${PORT}\n  ledger:    ${LEDGER}\n  snapshots: ${SNAPDIR}`));

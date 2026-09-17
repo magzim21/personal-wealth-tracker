@@ -1,41 +1,201 @@
+// Ledgerbook local server (Go, standard library only).
+// Serves index.html and owns the data file. Storage resolves as:
+//   ledger  : $LEDGER_PATH  -> config.json ledgerPath  -> ./ledger.json (if present) -> iCloud Drive
+//   snapshot: $SNAPSHOT_DIR -> config.json snapshotDir -> <ledger dir>/snapshots
+// A snapshot is written on every save (deduped; newest snapKeep retained).
 package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
 
-const bookFile = "ledger.json"
+func git(args ...string) string {
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+const project = "personal-wealth-tracker"
+const snapKeep = 300
+
+func home() string { h, _ := os.UserHomeDir(); return h }
+
+var (
+	configDir  = filepath.Join(home(), "Library", "Application Support", "PersonalWealthTracker")
+	configFile = filepath.Join(configDir, "config.json")
+	iCloudDir  = filepath.Join(home(), "Library", "Mobile Documents", "com~apple~CloudDocs", "PersonalWealthTracker")
+	homeDir    = filepath.Join(home(), "PersonalWealthTracker")
+)
+
+type config struct {
+	LedgerPath  string `json:"ledgerPath,omitempty"`
+	SnapshotDir string `json:"snapshotDir,omitempty"`
+}
+
+var cfg config
+var ledger string
+var snapDir string
+
+func loadConfig() config {
+	var c config
+	if b, err := os.ReadFile(configFile); err == nil {
+		_ = json.Unmarshal(b, &c)
+	}
+	return c
+}
+func saveConfig(c config) error {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(c, "", "  ")
+	return os.WriteFile(configFile, b, 0o644)
+}
+func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+func resolveLedger(c config) string {
+	if v := os.Getenv("LEDGER_PATH"); v != "" {
+		return v
+	}
+	if c.LedgerPath != "" {
+		return c.LedgerPath
+	}
+	if wd, err := os.Getwd(); err == nil && exists(filepath.Join(wd, "ledger.json")) {
+		return filepath.Join(wd, "ledger.json")
+	}
+	return filepath.Join(iCloudDir, "ledger.json")
+}
+func resolveSnapDir(c config, led string) string {
+	if v := os.Getenv("SNAPSHOT_DIR"); v != "" {
+		return v
+	}
+	if c.SnapshotDir != "" {
+		return c.SnapshotDir
+	}
+	return filepath.Join(filepath.Dir(led), "snapshots")
+}
+
+func stamp() string { return time.Now().Format("20060102-150405") }
+
+func snapList() []string {
+	entries, err := os.ReadDir(snapDir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		n := e.Name()
+		if strings.HasPrefix(n, project+"_") && strings.HasSuffix(n, ".json") {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func writeSnapshot(body []byte) {
+	if err := os.MkdirAll(snapDir, 0o755); err != nil {
+		return
+	}
+	before := snapList()
+	if len(before) > 0 {
+		if last, err := os.ReadFile(filepath.Join(snapDir, before[len(before)-1])); err == nil && string(last) == string(body) {
+			return // dedupe
+		}
+	}
+	_ = os.WriteFile(filepath.Join(snapDir, project+"_"+stamp()+".json"), body, 0o644)
+	after := snapList()
+	for i := 0; i < len(after)-snapKeep; i++ {
+		_ = os.Remove(filepath.Join(snapDir, after[i]))
+	}
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
 
 func main() {
+	cfg = loadConfig()
+	ledger = resolveLedger(cfg)
+	snapDir = resolveSnapDir(cfg, ledger)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8123"
+	}
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
-	mux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {
+
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		if git("rev-parse", "--is-inside-work-tree") != "true" {
+			writeJSON(w, 200, map[string]any{"isRepo": false})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"isRepo": true, "commit": git("rev-parse", "--short", "HEAD"),
+			"tag": git("describe", "--tags", "--exact-match", "HEAD"), "dirty": git("status", "--porcelain") != ""})
+	})
+
+	mux.HandleFunc("/api/location", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			if data, err := os.ReadFile(bookFile); err == nil { w.Write(data) } else { w.Write([]byte("null")) }
+			wd, _ := os.Getwd()
+			writeJSON(w, 200, map[string]any{"ledgerPath": ledger, "snapshotDir": snapDir, "ledgerExists": exists(ledger),
+				"defaults": map[string]string{"icloud": filepath.Join(iCloudDir, "ledger.json"), "home": filepath.Join(homeDir, "ledger.json"), "cwd": filepath.Join(wd, "ledger.json")}})
 		case http.MethodPut:
-			body, err := io.ReadAll(r.Body)
-			if err != nil { http.Error(w, "read error", 400); return }
-			if err := os.WriteFile(bookFile, body, 0644); err != nil { http.Error(w, "write error", 500); return }
-			w.WriteHeader(http.StatusNoContent)
+			var o config
+			b, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(b, &o)
+			if o.LedgerPath != "" {
+				if !strings.HasPrefix(o.LedgerPath, "/") {
+					writeJSON(w, 400, map[string]string{"error": "ledgerPath must be an absolute path"})
+					return
+				}
+				ledger = o.LedgerPath
+				if o.SnapshotDir == "" && os.Getenv("SNAPSHOT_DIR") == "" && cfg.SnapshotDir == "" {
+					snapDir = filepath.Join(filepath.Dir(ledger), "snapshots")
+				}
+			}
+			if o.SnapshotDir != "" {
+				if !strings.HasPrefix(o.SnapshotDir, "/") {
+					writeJSON(w, 400, map[string]string{"error": "snapshotDir must be an absolute path"})
+					return
+				}
+				snapDir = o.SnapshotDir
+			}
+			cfg.LedgerPath, cfg.SnapshotDir = ledger, snapDir
+			if err := saveConfig(cfg); err != nil {
+				writeJSON(w, 500, map[string]string{"error": err.Error()})
+				return
+			}
+			_ = os.MkdirAll(filepath.Dir(ledger), 0o755)
+			writeJSON(w, 200, map[string]any{"ledgerPath": ledger, "snapshotDir": snapDir, "ledgerExists": exists(ledger)})
 		default:
 			http.Error(w, "method not allowed", 405)
 		}
 	})
+
 	mux.HandleFunc("/api/rates", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		symbol := r.URL.Query().Get("symbol")
 		if key := os.Getenv("TWELVEDATA_API_KEY"); key != "" {
 			resp, err := http.Get("https://api.twelvedata.com/exchange_rate?symbol=" + url.QueryEscape(symbol) + "&apikey=" + url.QueryEscape(key))
-			if err != nil { http.Error(w, "upstream error", 502); return }
+			if err != nil {
+				http.Error(w, "upstream error", 502)
+				return
+			}
 			defer resp.Body.Close()
 			body, _ := io.ReadAll(resp.Body)
 			w.Write(body)
@@ -43,19 +203,58 @@ func main() {
 		}
 		cur := strings.SplitN(symbol, "/", 2)[0]
 		resp, err := http.Get("https://open.er-api.com/v6/latest/USD")
-		if err != nil { http.Error(w, "upstream error", 502); return }
+		if err != nil {
+			http.Error(w, "upstream error", 502)
+			return
+		}
 		defer resp.Body.Close()
-		var data map[string]interface{}
+		var data map[string]any
 		json.NewDecoder(resp.Body).Decode(&data)
-		rates, _ := data["rates"].(map[string]interface{})
+		rates, _ := data["rates"].(map[string]any)
 		if v, ok := rates[cur].(float64); ok && v != 0 {
-			fmt.Fprintf(w, `{"symbol":%q,"rate":%g}`, symbol, 1.0/v)
+			writeJSON(w, 200, map[string]any{"symbol": symbol, "rate": 1.0 / v})
 		} else {
 			w.Write([]byte(`{"rate":0}`))
 		}
 	})
-	mux.Handle("/", http.FileServer(http.Dir(".")))
-	addr := "127.0.0.1:8123"
-	log.Printf("Ledgerbook at http://%s  (data file: %s)", addr, bookFile)
-	log.Fatal(http.ListenAndServe(addr, mux))
+
+	mux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			if data, err := os.ReadFile(ledger); err == nil {
+				w.Write(data)
+			} else {
+				w.Write([]byte("null"))
+			}
+		case http.MethodPut:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "read error", 400)
+				return
+			}
+			if err := os.MkdirAll(filepath.Dir(ledger), 0o755); err != nil {
+				http.Error(w, "mkdir error", 500)
+				return
+			}
+			if err := os.WriteFile(ledger, body, 0o644); err != nil {
+				http.Error(w, "write error", 500)
+				return
+			}
+			writeSnapshot(body)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "method not allowed", 405)
+		}
+	})
+
+	fs := http.FileServer(http.Dir("."))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		fs.ServeHTTP(w, r)
+	})
+
+	addr := "127.0.0.1:" + port
+	os.Stdout.WriteString("Ledgerbook → http://" + addr + "\n  ledger:    " + ledger + "\n  snapshots: " + snapDir + "\n")
+	http.ListenAndServe(addr, mux)
 }
