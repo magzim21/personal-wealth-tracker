@@ -91,6 +91,7 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
 .typehead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:color-mix(in srgb,var(--surface-2) 60%,transparent);border-bottom:1px solid var(--line)}
 .typehead .tname{flex:1;font-weight:600;font-size:12.5px}
 .typehead .ttotal{color:var(--muted);font-size:12.5px;margin-right:2px}
+.cnote{display:block;color:var(--faint);font-size:11.5px;font-weight:400;font-style:italic;margin-top:3px;white-space:pre-wrap;line-height:1.35}
 .arow.acct{padding-left:28px}
 .arow .name{flex:1}
 .arow .sub{color:var(--faint)}
@@ -159,7 +160,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v22", UPDATED="2026-09-17";
+const VERSION="v23", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -315,7 +316,7 @@ function viewAccounts(){
     out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="total">${fmtBal(classTotalBase(ck))}</span></div>`;
     types.forEach(t=>{
       out+=`<div class="typehead">
-        <span class="tname">${esc(t.name)}</span>
+        <span class="tname">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
         <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}</span>
         <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
         <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
@@ -326,7 +327,7 @@ function viewAccounts(){
         const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
         const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
         return `<div class="arow acct">
-          <span class="name">${esc(a.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:''}</span>
+          <span class="name">${esc(a.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
           <span class="bal">${native}${fmtBal(baseBal)}</span>
           <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
           <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
@@ -558,8 +559,8 @@ function doImport(text){
 /* ---- account modal ---- */
 function acctModal(existing,presetTypeId){
   let draft;
-  if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset"}; }
-  else { const pt=presetTypeId?typeById(presetTypeId):null; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:(pt&&pt.class)||"asset"}; }
+  if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset",comment:existing.comment||""}; }
+  else { const pt=presetTypeId?typeById(presetTypeId):null; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:(pt&&pt.class)||"asset",comment:""}; }
   UI.modal={kind:"acct",id:existing?existing.id:null,draft};
   renderModal();
 }
@@ -599,6 +600,7 @@ function renderModal(){
         </div>
         <label class="field" id="ac-newtype-wrap" style="${a.typeId==="__new"?"":"display:none"}"><span>New type name</span><input type="text" id="ac-newtype" placeholder="e.g. Bank"></label>
         <label class="field"><span>Currency</span><select id="ac-cur">${CURRENCIES.map(c=>`<option value="${c}" ${a.currency===c?"selected":""}>${c}</option>`).join("")}</select></label>
+        <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ac-comment" rows="2" placeholder="Notes about this account">${esc(a.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-acct">Save</button></div>
     </div></div>`;
@@ -613,6 +615,7 @@ function renderModal(){
       <div class="modal-b">
         <label class="field"><span>Type name</span><input type="text" id="ty-name" value="${escAttr(t.name)}" placeholder="e.g. Bank"></label>
         ${UI.modal.id?"":`<label class="field"><span>Class</span><select id="ty-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${t.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>`}
+        <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ty-comment" rows="2" placeholder="Notes about this type">${esc(t.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-type">Save</button></div>
     </div></div>`;
@@ -734,8 +737,8 @@ document.addEventListener("click",e=>{
     case "tab": UI.view=el.dataset.view; render(); break;
     case "new-acct": acctModal(null); break;
     case "add-acct-in": acctModal(null, id); break;
-    case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset"}}; renderModal(); break;
-    case "edit-type": { const t=typeById(id); if(t){ UI.modal={kind:"type",id,draft:{name:t.name,cls:t.class}}; renderModal(); } break; }
+    case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset",comment:""}}; renderModal(); break;
+    case "edit-type": { const t=typeById(id); if(t){ UI.modal={kind:"type",id,draft:{name:t.name,cls:t.class,comment:t.comment||""}}; renderModal(); } break; }
     case "del-type": { const tid=id; if(accountsInType(tid).length){ toast("This type has accounts — move or delete them first."); } else askConfirm("Delete this type?", ()=>{ S.types=S.types.filter(t=>t.id!==tid); save(); render(); }); break; }
     case "save-type": saveType(); break;
     case "edit-acct": acctModal(acctById(id)); break;
@@ -760,7 +763,11 @@ document.addEventListener("click",e=>{
     case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
   }
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&UI.modal){pendingConfirm=null;UI.modal=null;renderModal();}});
+document.addEventListener("keydown",e=>{
+  if(!UI.modal) return;
+  if(e.key==="Escape"){ pendingConfirm=null; UI.modal=null; renderModal(); return; }
+  if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; pendingConfirm=null; UI.modal=null; renderModal(); if(fn){ try{ fn(); }catch(err){} } }
+});
 document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
@@ -848,6 +855,7 @@ function saveAcct(){
   const cls=document.getElementById("ac-class").value;
   let typeId=document.getElementById("ac-type").value;
   const currency=document.getElementById("ac-cur").value;
+  const comment=(document.getElementById("ac-comment").value||"").trim();
   if(typeId==="__new"){
     const tn=document.getElementById("ac-newtype").value.trim();
     if(!tn){ toast("Name the new type."); return; }
@@ -855,8 +863,8 @@ function saveAcct(){
   }
   if(!typeId){ toast("Choose a type for the account."); return; }
   if(S.settings.rates[currency]==null) S.settings.rates[currency]=1;
-  if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; }
-  else S.accounts.push({id:uid(),name,typeId,currency});
+  if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; acc.comment=comment; }
+  else S.accounts.push({id:uid(),name,typeId,currency,comment});
   UI.modal=null;save();renderModal();render();
 }
 function delAccount(id){
@@ -866,8 +874,9 @@ function delAccount(id){
 function saveType(){
   const name=document.getElementById("ty-name").value.trim();
   if(!name){ toast("Name the type."); return; }
-  if(UI.modal.id){ const t=typeById(UI.modal.id); if(t) t.name=name; }
-  else { const cls=document.getElementById("ty-class").value; S.types.push({id:uid(),name,class:cls}); }
+  const comment=(document.getElementById("ty-comment").value||"").trim();
+  if(UI.modal.id){ const t=typeById(UI.modal.id); if(t){ t.name=name; t.comment=comment; } }
+  else { const cls=document.getElementById("ty-class").value; S.types.push({id:uid(),name,class:cls,comment}); }
   UI.modal=null; save(); renderModal(); render();
 }
 function saveTx(){
