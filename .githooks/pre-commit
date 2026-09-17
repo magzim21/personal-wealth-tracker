@@ -16,7 +16,7 @@ for f in $staged; do
   esac
   # app source, docs and repo config are allowed (they legitimately mention these keys)
   case "$f" in
-    index.html|*.md|*.markdown|.gitignore|setup.sh|.github/*|.githooks/*) continue ;;
+    index.html|*.md|*.markdown|.gitignore|setup.sh|.github/*|.githooks/*|scripts/*|*.releaserc.yaml|.releaserc.yaml) continue ;;
   esac
   blob=$(git show ":$f" 2>/dev/null)
   case "$blob" in

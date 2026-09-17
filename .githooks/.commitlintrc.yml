@@ -1,0 +1,3 @@
+# Commit message rules for CI (commitlint). Conventional Commits.
+extends:
+  - "@commitlint/config-conventional"

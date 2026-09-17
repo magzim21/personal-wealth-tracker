@@ -1,0 +1,9 @@
+# semantic-release: tag + GitHub release from Conventional Commits.
+# No npm publish (this is not an npm package) — only commit analysis,
+# release notes, and a GitHub release/tag.
+branches:
+  - prod
+plugins:
+  - "@semantic-release/commit-analyzer"
+  - "@semantic-release/release-notes-generator"
+  - "@semantic-release/github"
