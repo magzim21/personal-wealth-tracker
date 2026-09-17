@@ -167,7 +167,43 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
   .linehead,.line{grid-template-columns:1fr 80px 80px 26px}
   .grid2{grid-template-columns:1fr}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ---- motion pass ---- */
+.btn{transition:background .15s,border-color .15s,color .15s,box-shadow .15s,transform .08s}
+.btn:active{transform:scale(.97)}
+.iconbtn{transition:background .15s,color .15s,transform .09s}
+.iconbtn:active{transform:scale(.86)}
+.nav button{transition:background .15s,color .15s,transform .08s}
+.nav button:active{transform:scale(.98)}
+.arow.acct{transition:background .15s}
+.arow.acct:hover{background:var(--surface-2)}
+.typehead{transition:background .15s}
+.txcard{transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease}
+.txcard:hover{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
+.raterow input,input[type=text],input[type=date],input[type=number],select,textarea{transition:border-color .15s,box-shadow .15s}
+select,button{transition:transform .08s}
+select:active{transform:scale(.99)}
+/* collapsible type body: animate height via grid-rows 1fr<->0fr */
+.acctwrap{display:grid;grid-template-rows:1fr;transition:grid-template-rows .24s ease}
+.acctwrap>.acctwrap-in{overflow:hidden;min-height:0}
+.typehead.collapsed + .acctwrap{grid-template-rows:0fr}
+.tcount{display:none}
+.typehead.collapsed .tcount{display:inline-block}
+/* modal + overlay enter/leave */
+@keyframes ov-in{from{opacity:0}to{opacity:1}}
+@keyframes ov-out{from{opacity:1}to{opacity:0}}
+@keyframes mo-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes mo-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(8px) scale(.985)}}
+.overlay{animation:ov-in .16s ease both}
+.modal{animation:mo-in .19s cubic-bezier(.2,.7,.3,1) both}
+.overlay.closing{animation:ov-out .16s ease both}
+.overlay.closing .modal{animation:mo-out .16s ease both}
+/* toast */
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+.toast{animation:toast-in .2s ease both}
+/* balance value change flash */
+@keyframes val-flash{0%{background:var(--accent-soft)}100%{background:transparent}}
+.bal.changed,.ttotal.changed,.total.changed{animation:val-flash .9s ease}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 <div id="app"></div>
@@ -182,7 +218,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v28", UPDATED="2026-09-17";
+const VERSION="v29", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -374,12 +410,12 @@ function viewAccounts(){
       out+=`<div class="typehead${collapsed?' collapsed':''}">
         <button class="iconbtn chev" data-action="toggle-type" data-id="${t.id}" title="${collapsed?'Expand':'Collapse'}" aria-expanded="${!collapsed}">${I.chev}</button>
         <span class="tname" data-action="toggle-type" data-id="${t.id}">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
-        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}${collapsed&&accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
+        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}${accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
         <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
         <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
         <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button>
       </div>`;
-      if(!collapsed) out+=accts.map(a=>{
+      const rows=accts.map(a=>{
         const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
         const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
         return `<div class="arow acct">
@@ -389,6 +425,7 @@ function viewAccounts(){
           <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
         </div>`;
       }).join("")||`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No accounts</span><span></span></div>`;
+      out+=`<div class="acctwrap"><div class="acctwrap-in">${rows}</div></div>`;
     });
     out+=`</div>`;
   }
@@ -438,6 +475,14 @@ function viewLedger(){
 /* ---- in-page dialogs (native alert/confirm are blocked in the sandbox) ---- */
 let toastT=null;
 function toast(msg){ const r=document.getElementById("toast-root"); if(!r) return; r.innerHTML=`<div class="toast">${esc(msg)}</div>`; clearTimeout(toastT); toastT=setTimeout(()=>{r.innerHTML="";},2800); }
+/* animate the modal out, then clear it and run an optional callback */
+function dismissModal(cb){
+  const ov=document.querySelector(".overlay");
+  const finish=()=>{ pendingConfirm=null; UI.modal=null; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
+  if(!ov || window.matchMedia("(prefers-reduced-motion:reduce)").matches){ finish(); return; }
+  ov.classList.add("closing");
+  setTimeout(finish,160);
+}
 let pendingConfirm=null;
 function askConfirm(message,onYes){ pendingConfirm=onYes; UI.modal={kind:"confirm",message}; renderModal(); }
 
@@ -808,7 +853,12 @@ document.addEventListener("click",e=>{
   switch(a){
     case "tab": UI.view=el.dataset.view; render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
-    case "toggle-type": UI.collapsed[id]=!UI.collapsed[id]; saveUIPrefs(); render(); break;
+    case "toggle-type": {
+      const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
+      const head=el.closest(".typehead");
+      if(head){ head.classList.toggle("collapsed",on); const c=head.querySelector(".chev"); if(c){ c.title=on?"Expand":"Collapse"; c.setAttribute("aria-expanded",String(!on)); } }
+      else render();
+      break; }
     case "new-acct": acctModal(null); break;
     case "add-acct-in": acctModal(null, id); break;
     case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset",comment:""}}; renderModal(); break;
@@ -827,9 +877,9 @@ document.addEventListener("click",e=>{
     case "download-build": downloadLocalBuild(); break;
     case "edit-tx": txModal(S.transactions.find(t=>t.id===id)); break;
     case "del-tx": { const did=id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
-    case "close": pendingConfirm=null; UI.modal=null; renderModal(); break;
-    case "overlay": if(e.target===el){ pendingConfirm=null; UI.modal=null; renderModal(); } break;
-    case "confirm-yes": { const fn=pendingConfirm; pendingConfirm=null; UI.modal=null; renderModal(); if(fn){ try{ fn(); }catch(err){} } break; }
+    case "close": dismissModal(); break;
+    case "overlay": if(e.target===el){ dismissModal(); } break;
+    case "confirm-yes": { const fn=pendingConfirm; dismissModal(fn); break; }
     case "save-acct": saveAcct(); break;
     case "add-line": syncLines(); UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
@@ -839,8 +889,8 @@ document.addEventListener("click",e=>{
 });
 document.addEventListener("keydown",e=>{
   if(!UI.modal) return;
-  if(e.key==="Escape"){ pendingConfirm=null; UI.modal=null; renderModal(); return; }
-  if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; pendingConfirm=null; UI.modal=null; renderModal(); if(fn){ try{ fn(); }catch(err){} } }
+  if(e.key==="Escape"){ dismissModal(); return; }
+  if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; dismissModal(fn); }
 });
 document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
@@ -943,7 +993,7 @@ function saveAcct(){
   if(S.settings.rates[currency]==null) S.settings.rates[currency]=1;
   if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; acc.comment=comment; }
   else S.accounts.push({id:uid(),name,typeId,currency,comment});
-  UI.modal=null;save();renderModal();render();
+  save();render();dismissModal();
 }
 function delAccount(id){
   if(S.transactions.some(t=>t.lines.some(l=>l.accountId===id))){ toast("This account is used in the ledger — remove those entries first."); return; }
@@ -955,7 +1005,7 @@ function saveType(){
   const comment=(document.getElementById("ty-comment").value||"").trim();
   if(UI.modal.id){ const t=typeById(UI.modal.id); if(t){ t.name=name; t.comment=comment; } }
   else { const cls=document.getElementById("ty-class").value; S.types.push({id:uid(),name,class:cls,comment}); }
-  UI.modal=null; save(); renderModal(); render();
+  save();render();dismissModal();
 }
 function saveTx(){
   syncLines();
@@ -966,7 +1016,7 @@ function saveTx(){
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
   if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id);S.transactions[idx]=tx;}
   else S.transactions.push(tx);
-  UI.modal=null;save();renderModal();render();
+  save();render();dismissModal();
 }
 
 function esc(s){return String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
