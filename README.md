@@ -53,43 +53,29 @@ node server.mjs        # or:  go run server.go
 then open <http://127.0.0.1:8123>. That's it — the server owns your data file and serves
 the app locally.
 
-### Develop with hot-reload
+### Develop with auto-restart
 
-To have the server restart automatically whenever **any** file changes (backend *and*
-frontend — `index.html`, `server.mjs`, everything in the folder):
-
-```bash
-# Node 18.11+ — restarts on any change under this folder
-node --watch-path=. server.mjs
-
-# Go — needs a watcher; either:
-go install github.com/air-verse/air@latest && air        # config-free live reload
-#   …or, with entr installed:
-find . -type f | entr -r go run server.go
-```
-
-The pages are served with `Cache-Control: no-store`, so a browser refresh always gets the
-latest `index.html` — no stale cache. For most edits, `--watch-path` + **⌘R** is all you need.
-
-Want the **browser** to refresh itself on save too? Add a browser-sync proxy — but note it
-does **not** replace the server: it sits *in front of* it, so you run **two terminals at
-once** and leave the server running:
+One command, one terminal — the server restarts itself whenever you edit it (Node 18.11+):
 
 ```bash
-# terminal 1 — the app + data server (keep running)
-node --watch-path=. server.mjs
-
-# terminal 2 — auto-refresh proxy pointing at the server above
-npx browser-sync start --proxy 127.0.0.1:8123 --files "index.html,*.mjs" --no-open
+node --watch server.mjs
 ```
 
-Then open the proxy URL browser-sync prints — **`http://localhost:3000`** — *not* `:8123`.
-(`localhost:3001` is just browser-sync's own dashboard; ignore it. If `:3000` shows an
-error, the server in terminal 1 isn't running.)
+That's it. `index.html` changes need **no** restart — the server reads it from disk on every
+request and sends `Cache-Control: no-store`, so a browser **⌘R** always shows your latest
+edit. `--watch` restarts only when `server.mjs` (the backend) changes, and it deliberately
+**ignores `ledger.json` and snapshots**, so saving a transaction never bounces the server.
+
+Go equivalent (needs a watcher — `air` or `entr`):
+
+```bash
+go install github.com/air-verse/air@latest && air        # config-free
+find . -name '*.go' | entr -r go run server.go           # …or with entr
+```
 
 Note: the app compares its version with the server's and shows a "restart the server" prompt
-when they differ. With `--watch` the server restarts on every edit, so bump `VERSION` in
-`index.html` and `APP_VERSION` in `server.mjs` together and both refresh in step.
+when they differ. Bump `VERSION` in `index.html` and `APP_VERSION` in `server.mjs` together;
+editing `server.mjs` triggers the `--watch` restart, so they come back in step.
 
 ### Where your data is stored (and how to change it)
 

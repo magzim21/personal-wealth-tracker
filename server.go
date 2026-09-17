@@ -27,7 +27,7 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v34" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const appVersion = "v35" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
 
 func home() string { h, _ := os.UserHomeDir(); return h }

@@ -14,7 +14,7 @@ import { dirname, join } from "path";
 import { execSync, execFileSync } from "child_process";
 
 const PROJECT = "personal-wealth-tracker";
-const APP_VERSION = "v34"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const APP_VERSION = "v35"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = join(homedir(), "Library", "Application Support", "PersonalWealthTracker");
