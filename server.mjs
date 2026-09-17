@@ -11,9 +11,10 @@ import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 
 const PROJECT = "personal-wealth-tracker";
+const APP_VERSION = "v32"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = join(homedir(), "Library", "Application Support", "PersonalWealthTracker");
@@ -65,8 +66,20 @@ createServer(async (req, res) => {
 
   if (u.pathname === "/api/version") {
     const git = (c) => { try { return execSync("git " + c, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; } };
-    if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { isRepo: false });
-    return json(res, 200, { isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), dirty: git("status --porcelain") !== "" });
+    if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { appVersion: APP_VERSION, isRepo: false });
+    return json(res, 200, { appVersion: APP_VERSION, isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), dirty: git("status --porcelain") !== "" });
+  }
+
+  if (u.pathname === "/api/pick") {
+    // Native macOS chooser via osascript (works because the server runs on the user's Mac).
+    const kind = u.searchParams.get("kind") || "folder";
+    const script = kind === "file"
+      ? 'POSIX path of (choose file name with prompt "Choose where to store your ledger" default name "ledger.json")'
+      : 'POSIX path of (choose folder with prompt "Choose a folder")';
+    try {
+      const p = execFileSync("osascript", ["-e", script], { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+      return json(res, 200, { path: p });
+    } catch { return json(res, 200, { cancelled: true }); }
   }
 
   if (u.pathname === "/api/location") {

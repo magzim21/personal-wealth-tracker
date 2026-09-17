@@ -27,6 +27,7 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
+const appVersion = "v32" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
 
 func home() string { h, _ := os.UserHomeDir(); return h }
@@ -141,11 +142,25 @@ func main() {
 
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		if git("rev-parse", "--is-inside-work-tree") != "true" {
-			writeJSON(w, 200, map[string]any{"isRepo": false})
+			writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": false})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"isRepo": true, "commit": git("rev-parse", "--short", "HEAD"),
+		writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": true, "commit": git("rev-parse", "--short", "HEAD"),
 			"tag": git("describe", "--tags", "--exact-match", "HEAD"), "dirty": git("status", "--porcelain") != ""})
+	})
+
+	mux.HandleFunc("/api/pick", func(w http.ResponseWriter, r *http.Request) {
+		kind := r.URL.Query().Get("kind")
+		script := `POSIX path of (choose folder with prompt "Choose a folder")`
+		if kind == "file" {
+			script = `POSIX path of (choose file name with prompt "Choose where to store your ledger" default name "ledger.json")`
+		}
+		out, err := exec.Command("osascript", "-e", script).Output()
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"cancelled": true})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"path": strings.TrimSpace(string(out))})
 	})
 
 	mux.HandleFunc("/api/location", func(w http.ResponseWriter, r *http.Request) {
