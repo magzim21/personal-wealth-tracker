@@ -133,7 +133,8 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .balrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r-sm);font-size:13px;background:var(--surface-2)}
 .balrow.ok{background:var(--accent-soft);color:var(--accent-ink)}
 .balrow.bad{background:#f7e7e6;color:var(--neg)}
-:root[data-theme="dark"] .balrow.bad,:root:not([data-theme="light"]) .balrow.bad{background:#33201f}
+:root[data-theme="dark"] .balrow.bad{background:#33201f}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .balrow.bad{background:#33201f} }
 
 @media (max-width:640px){
   .app{grid-template-columns:1fr}
@@ -160,7 +161,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v23", UPDATED="2026-09-17";
+const VERSION="v24", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
