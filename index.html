@@ -133,6 +133,8 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .txnote{padding:10px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;white-space:pre-wrap}
 
 .empty{text-align:center;padding:40px 20px;color:var(--muted);background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r)}
+.ledgertools{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--muted)}
+.ledgertools select{width:auto;font-weight:400;color:var(--ink)}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
 .modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column}
@@ -176,7 +178,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v26", UPDATED="2026-09-17";
+const VERSION="v27", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -247,7 +249,8 @@ function migrate(st){
   return {types,accounts,transactions,settings:(st&&st.settings)||{currency:"USD"}};
 }
 let S=null;
-const UI={view:"accounts",modal:null};
+const UI={view:"accounts",modal:null,ledgerSort:"date-desc"};
+const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
   if(!S.settings) S.settings={currency:"USD"};
@@ -383,10 +386,26 @@ function viewAccounts(){
   return out+`<button class="btn sm" data-action="new-type">${I.plus}Add type</button>`;
 }
 
+function txAmount(t){ return round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0)); }
+function sortTxs(arr){
+  const s=UI.ledgerSort||"date-desc";
+  const byDate=(a,b)=>a.date<b.date?-1:(a.date>b.date?1:0);
+  arr.sort((a,b)=>{
+    switch(s){
+      case "date-asc":    return byDate(a,b);
+      case "amount-desc": return (txAmount(b)-txAmount(a)) || byDate(b,a);
+      case "amount-asc":  return (txAmount(a)-txAmount(b)) || byDate(a,b);
+      case "alpha":       return (a.description||"").localeCompare(b.description||"") || byDate(b,a);
+      default:            return byDate(b,a); // date-desc
+    }
+  });
+  return arr;
+}
 function viewLedger(){
-  const txs=[...S.transactions].sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  const txs=sortTxs([...S.transactions]);
   if(!txs.length) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
-  return txs.map(t=>{
+  const toolbar=`<div class="ledgertools"><span>Sort</span><select id="ledger-sort">${LEDGER_SORTS.map(([k,l])=>`<option value="${k}" ${(UI.ledgerSort||"date-desc")===k?"selected":""}>${l}</option>`).join("")}</select></div>`;
+  return toolbar + txs.map(t=>{
     const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
     const crBase=round2(t.lines.reduce((s,l)=>s+toBase(l.credit||0,accCur(acctById(l.accountId))),0));
     return `<div class="txcard">
@@ -815,6 +834,8 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
+  const ls=e.target.closest("#ledger-sort");
+  if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const r=e.target.closest("[data-rate]");
   if(r){ const c=r.dataset.rate, v=parseFloat(r.value); if(!isNaN(v)&&v>0){ S.settings.rates[c]=v; save(); render(); } return; }
   const imp=e.target.closest("#import-file");
@@ -906,6 +927,8 @@ function saveAcct(){
     const t={id:uid(),name:tn,class:cls}; S.types.push(t); typeId=t.id;
   }
   if(!typeId){ toast("Choose a type for the account."); return; }
+  const dup=S.accounts.some(a=>a.typeId===typeId && a.id!==UI.modal.id && (a.name||"").trim().toLowerCase()===name.toLowerCase());
+  if(dup){ toast(`“${name}” already exists in this type — pick a different name.`); return; }
   if(S.settings.rates[currency]==null) S.settings.rates[currency]=1;
   if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; acc.comment=comment; }
   else S.accounts.push({id:uid(),name,typeId,currency,comment});
