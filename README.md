@@ -69,13 +69,23 @@ find . -type f | entr -r go run server.go
 ```
 
 The pages are served with `Cache-Control: no-store`, so a browser refresh always gets the
-latest `index.html` — no stale cache. Want the **browser** to refresh itself on save too?
-Run a live-reload proxy alongside the server:
+latest `index.html` — no stale cache. For most edits, `--watch-path` + **⌘R** is all you need.
+
+Want the **browser** to refresh itself on save too? Add a browser-sync proxy — but note it
+does **not** replace the server: it sits *in front of* it, so you run **two terminals at
+once** and leave the server running:
 
 ```bash
+# terminal 1 — the app + data server (keep running)
+node --watch-path=. server.mjs
+
+# terminal 2 — auto-refresh proxy pointing at the server above
 npx browser-sync start --proxy 127.0.0.1:8123 --files "index.html,*.mjs" --no-open
-# then use the URL browser-sync prints (e.g. http://localhost:3000)
 ```
+
+Then open the proxy URL browser-sync prints — **`http://localhost:3000`** — *not* `:8123`.
+(`localhost:3001` is just browser-sync's own dashboard; ignore it. If `:3000` shows an
+error, the server in terminal 1 isn't running.)
 
 Note: the app compares its version with the server's and shows a "restart the server" prompt
 when they differ. With `--watch` the server restarts on every edit, so bump `VERSION` in
