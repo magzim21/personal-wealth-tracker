@@ -106,6 +106,10 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
 .typehead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:color-mix(in srgb,var(--surface-2) 60%,transparent);border-bottom:1px solid var(--line)}
 .typehead .tname{flex:1;font-weight:600;font-size:12.5px}
 .typehead .ttotal{color:var(--muted);font-size:12.5px;margin-right:2px}
+.typehead .chev{color:var(--faint);flex:none;transition:transform .15s}
+.typehead.collapsed .chev{transform:rotate(-90deg)}
+.typehead .tname{cursor:pointer}
+.tcount{font-family:var(--fs-sans);font-size:10px;font-weight:700;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:0 6px;margin-left:6px;vertical-align:1px}
 .cnote{display:block;color:var(--faint);font-size:11.5px;font-weight:400;font-style:italic;margin-top:3px;white-space:pre-wrap;line-height:1.35}
 .arow.acct{padding-left:28px}
 .arow .name{flex:1}
@@ -178,7 +182,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v27", UPDATED="2026-09-17";
+const VERSION="v28", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -249,7 +253,10 @@ function migrate(st){
   return {types,accounts,transactions,settings:(st&&st.settings)||{currency:"USD"}};
 }
 let S=null;
-const UI={view:"accounts",modal:null,ledgerSort:"date-desc"};
+const UI={view:"accounts",modal:null,ledgerSort:"date-desc",collapsed:{}};
+const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -297,6 +304,7 @@ const I={
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   car:'<svg viewBox="0 0 44 30" fill="currentColor" style="width:24px;height:auto"><rect x="2" y="4.5" width="40" height="21" rx="6"/><path d="M6.5 10 L19 11.8 L19 12.9 L6.5 12.6 Z" fill="var(--accent)"/><path d="M37.5 10 L25 11.8 L25 12.9 L37.5 12.6 Z" fill="var(--accent)"/><rect x="14" y="13.6" width="16" height="9.2" rx="2" fill="var(--accent)"/><rect x="15.3" y="14.8" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="16.7" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="18.6" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="20.5" width="13.4" height="1.05" rx="0.5"/><rect x="10.5" y="23.2" width="23" height="1.9" rx="0.95" fill="var(--accent)"/></svg>',
 };
@@ -361,15 +369,17 @@ function viewAccounts(){
     if(!types.length) continue;
     out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="total">${fmtBal(classTotalBase(ck))}</span></div>`;
     types.forEach(t=>{
-      out+=`<div class="typehead">
-        <span class="tname">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
-        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}</span>
+      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
+      const collapsed=!!UI.collapsed[t.id];
+      out+=`<div class="typehead${collapsed?' collapsed':''}">
+        <button class="iconbtn chev" data-action="toggle-type" data-id="${t.id}" title="${collapsed?'Expand':'Collapse'}" aria-expanded="${!collapsed}">${I.chev}</button>
+        <span class="tname" data-action="toggle-type" data-id="${t.id}">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
+        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}${collapsed&&accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
         <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
         <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
         <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button>
       </div>`;
-      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
-      out+=accts.map(a=>{
+      if(!collapsed) out+=accts.map(a=>{
         const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
         const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
         return `<div class="arow acct">
@@ -798,6 +808,7 @@ document.addEventListener("click",e=>{
   switch(a){
     case "tab": UI.view=el.dataset.view; render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
+    case "toggle-type": UI.collapsed[id]=!UI.collapsed[id]; saveUIPrefs(); render(); break;
     case "new-acct": acctModal(null); break;
     case "add-acct-in": acctModal(null, id); break;
     case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset",comment:""}}; renderModal(); break;
@@ -967,6 +978,7 @@ window.addEventListener("beforeunload",()=>{ try{ if(STORE&&S) STORE.save(S); }c
   let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
   S = loaded ? migrate(loaded) : seed();
   normalizeState();
+  loadUIPrefs();
   applyTheme();
   STORE.save(S);
   render();
