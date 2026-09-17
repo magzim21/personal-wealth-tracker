@@ -56,6 +56,10 @@ input,select{font-family:inherit;color:var(--ink)}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 2px}
 .curpick{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 .curpick select{font-weight:400;color:var(--ink);width:100%}
+.themeseg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
+.themeseg button{border:0;background:none;color:var(--muted);font-weight:500;font-size:12px;padding:6px 4px;border-radius:5px}
+.themeseg button:hover{color:var(--ink)}
+.themeseg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .main{min-width:0;display:flex;flex-direction:column}
 .mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:clamp(16px,3vw,26px) clamp(16px,3vw,28px) 0}
 .mainhead h2{font-size:19px}
@@ -161,7 +165,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v24", UPDATED="2026-09-17";
+const VERSION="v25", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -240,6 +244,12 @@ function normalizeState(){
   S.accounts.forEach(a=>{ if(!a.currency) a.currency=S.settings.currency; });                 // pin a fixed currency per account
   S.accounts.forEach(a=>{ if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
   if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
+  if(!["auto","light","dark"].includes(S.settings.theme)) S.settings.theme="auto";
+}
+const THEMES=[["auto","Auto"],["light","Light"],["dark","Dark"]];
+function applyTheme(){
+  const t=(S&&S.settings&&S.settings.theme)||"auto", r=document.documentElement;
+  if(t==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",t);
 }
 
 const acctById=id=>S.accounts.find(a=>a.id===id);
@@ -290,6 +300,9 @@ function render(){
         <label class="curpick"><span>Currency</span>
           <select id="cur-pick">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
         </label>
+        <div class="curpick" style="margin-top:10px"><span>Theme</span>
+          <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
+        </div>
         <button class="btn sm" data-action="open-rates" style="width:100%;margin-top:10px">Exchange rates</button>
         <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Backup / restore</button>
         ${STORE!==FILE_STORE?`<button class="btn sm" data-action="download-build" style="width:100%;margin-top:8px">⤓ Desktop app (.zip)</button>`:``}
@@ -736,6 +749,7 @@ document.addEventListener("click",e=>{
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
     case "tab": UI.view=el.dataset.view; render(); break;
+    case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
     case "new-acct": acctModal(null); break;
     case "add-acct-in": acctModal(null, id); break;
     case "new-type": UI.modal={kind:"type",id:null,draft:{name:"",cls:"asset",comment:""}}; renderModal(); break;
@@ -901,6 +915,7 @@ window.addEventListener("beforeunload",()=>{ try{ if(STORE&&S) STORE.save(S); }c
   let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
   S = loaded ? migrate(loaded) : seed();
   normalizeState();
+  applyTheme();
   STORE.save(S);
   render();
 })();
