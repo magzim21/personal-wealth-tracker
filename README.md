@@ -53,6 +53,34 @@ node server.mjs        # or:  go run server.go
 then open <http://127.0.0.1:8123>. That's it — the server owns your data file and serves
 the app locally.
 
+### Develop with hot-reload
+
+To have the server restart automatically whenever **any** file changes (backend *and*
+frontend — `index.html`, `server.mjs`, everything in the folder):
+
+```bash
+# Node 18.11+ — restarts on any change under this folder
+node --watch-path=. server.mjs
+
+# Go — needs a watcher; either:
+go install github.com/air-verse/air@latest && air        # config-free live reload
+#   …or, with entr installed:
+find . -type f | entr -r go run server.go
+```
+
+The pages are served with `Cache-Control: no-store`, so a browser refresh always gets the
+latest `index.html` — no stale cache. Want the **browser** to refresh itself on save too?
+Run a live-reload proxy alongside the server:
+
+```bash
+npx browser-sync start --proxy 127.0.0.1:8123 --files "index.html,*.mjs" --no-open
+# then use the URL browser-sync prints (e.g. http://localhost:3000)
+```
+
+Note: the app compares its version with the server's and shows a "restart the server" prompt
+when they differ. With `--watch` the server restarts on every edit, so bump `VERSION` in
+`index.html` and `APP_VERSION` in `server.mjs` together and both refresh in step.
+
 ### Where your data is stored (and how to change it)
 
 The server keeps your books in one JSON file and writes a snapshot next to it on every
