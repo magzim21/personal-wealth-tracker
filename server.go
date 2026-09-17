@@ -27,13 +27,20 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v35" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const appVersion = "v36" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
 
 func home() string { h, _ := os.UserHomeDir(); return h }
 
+func defaultConfigDir() string {
+	if v := os.Getenv("PWT_CONFIG_DIR"); v != "" {
+		return v
+	}
+	return filepath.Join(home(), "Library", "Application Support", "PersonalWealthTracker")
+}
+
 var (
-	configDir  = filepath.Join(home(), "Library", "Application Support", "PersonalWealthTracker")
+	configDir  = defaultConfigDir()
 	configFile = filepath.Join(configDir, "config.json")
 	iCloudDir  = filepath.Join(home(), "Library", "Mobile Documents", "com~apple~CloudDocs", "PersonalWealthTracker")
 	homeDir    = filepath.Join(home(), "PersonalWealthTracker")
@@ -153,7 +160,7 @@ func main() {
 		kind := r.URL.Query().Get("kind")
 		script := `POSIX path of (choose folder with prompt "Choose a folder")`
 		if kind == "file" {
-			script = `POSIX path of (choose file name with prompt "Choose where to store your ledger" default name "ledger.json")`
+			script = `POSIX path of (choose file with prompt "Locate your ledger file" of type {"json"})`
 		}
 		out, err := exec.Command("osascript", "-e", script).Output()
 		if err != nil {
