@@ -159,7 +159,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v21", UPDATED="2026-09-16";
+const VERSION="v22", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -272,7 +272,7 @@ const I={
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
-  car:'<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px"><path d="M2 13.4c0-.4.2-.8.6-1l2-1.2 2.1-2.5c.5-.6 1.2-.9 2-.9h6c.8 0 1.6.4 2.1 1l1.7 2.2 2.3.6c.7.2 1.2.8 1.2 1.5v1.3c0 .5-.4.9-.9.9h-1.5a2.5 2.5 0 0 1-4.9 0H9.4a2.5 2.5 0 0 1-4.9 0H2.9c-.5 0-.9-.4-.9-.9z"/><circle cx="6.9" cy="15" r="1.35" fill="var(--accent)"/><circle cx="16.6" cy="15" r="1.35" fill="var(--accent)"/></svg>',
+  car:'<svg viewBox="0 0 44 30" fill="currentColor" style="width:24px;height:auto"><rect x="2" y="4.5" width="40" height="21" rx="6"/><path d="M6.5 10 L19 11.8 L19 12.9 L6.5 12.6 Z" fill="var(--accent)"/><path d="M37.5 10 L25 11.8 L25 12.9 L37.5 12.6 Z" fill="var(--accent)"/><rect x="14" y="13.6" width="16" height="9.2" rx="2" fill="var(--accent)"/><rect x="15.3" y="14.8" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="16.7" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="18.6" width="13.4" height="1.05" rx="0.5"/><rect x="15.3" y="20.5" width="13.4" height="1.05" rx="0.5"/><rect x="10.5" y="23.2" width="23" height="1.9" rx="0.95" fill="var(--accent)"/></svg>',
 };
 
 function render(){
