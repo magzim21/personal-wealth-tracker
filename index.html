@@ -218,7 +218,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v29", UPDATED="2026-09-17";
+const VERSION="v30", UPDATED="2026-09-17";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const PROJECT="personal-wealth-tracker";
@@ -228,31 +228,8 @@ function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
 const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
 
 function seed(){
-  const Ty=(name,cls)=>({id:uid(),name,class:cls});
-  const ty={
-    bank:Ty("Bank","asset"), cashT:Ty("Cash","asset"), fixed:Ty("Fixed assets","asset"),
-    curLiab:Ty("Current liabilities","liability"),
-    ownEq:Ty("Owner's equity","equity"),
-  };
-  const types=Object.values(ty);
-  const A=(name,typeObj,currency)=>({id:uid(),name,typeId:typeObj.id,currency:currency||"USD"});
-  const a={
-    checking:A("Checking",ty.bank), savings:A("Savings",ty.bank),
-    cash:A("Cash",ty.cashT), euro:A("Euro cash",ty.cashT,"EUR"),
-    equipment:A("Equipment",ty.fixed),
-    ap:A("Accounts payable",ty.curLiab), loan:A("Loan payable",ty.curLiab),
-    eq:A("Owner's equity",ty.ownEq),
-  };
-  const accounts=Object.values(a);
-  const T=(date,description,lines)=>({id:uid(),date,description,lines:lines.map(([ac,d,c])=>({accountId:ac.id,debit:d||0,credit:c||0}))});
-  const transactions=[
-    T("2026-09-01","Owner funds the business",[[a.checking,5000,0],[a.eq,0,5000]]),
-    T("2026-09-03","Buy equipment",[[a.equipment,1500,0],[a.checking,0,1500]]),
-    T("2026-09-05","Take a short-term loan",[[a.savings,2000,0],[a.loan,0,2000]]),
-    T("2026-09-06","Buy euros",[[a.euro,200,0],[a.checking,0,216]]),  // €200 @ 1.08 = $216
-  ];
-  transactions[1].comment="Laptop and monitor for the office.";
-  return {types,accounts,transactions,settings:{currency:"USD",rates:{USD:1,EUR:1.08,GBP:1.27,JPY:0.0067,CAD:0.73,AUD:0.66},ratesUpdated:""}};
+  // Start empty — no sample accounts, types, or transactions. A fresh book.
+  return {types:[],accounts:[],transactions:[],settings:{currency:"USD",rates:{USD:1},ratesUpdated:""}};
 }
 /* ---- persistence: PORTS & ADAPTERS — one interface { load, save },
    two backends, chosen ONCE at startup (not a flag inside every call):
@@ -336,6 +313,24 @@ function money(n,cur){
 }
 function fmt(n,cur){ return n?money(n,cur):""; }
 function fmtBal(n,cur){ return money(n,cur); }
+/* animated numbers: wrap a figure so its value tweens when it changes between renders */
+function cnt(value,cur,key){ const c=cur||base(); return `<span class="cnt" data-count="${key}" data-value="${value}" data-cur="${c}">${money(value,c)}</span>`; }
+const prevNums={};
+function animateCounts(){
+  const reduce=window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  document.querySelectorAll(".cnt[data-count]").forEach(el=>{
+    const key=el.dataset.count, target=parseFloat(el.dataset.value)||0, cur=el.dataset.cur||base();
+    const had=(key in prevNums), prev=had?prevNums[key]:target;
+    prevNums[key]=target;
+    if(reduce || !had || prev===target){ el.textContent=money(target,cur); return; }
+    el.classList.add("changed");
+    const t0=performance.now(), dur=520, from=prev, delta=target-from;
+    (function frame(t){ const p=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-p,3);
+      el.textContent=money(from+delta*e,cur);
+      if(p<1) requestAnimationFrame(frame); else el.textContent=money(target,cur);
+    })(t0);
+  });
+}
 const I={
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -379,6 +374,7 @@ function render(){
       <div class="content">${UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
   </div>`;
+  animateCounts();
 }
 
 /* ---- explicit commit/migration warning banner (top of the main pane) ----
@@ -403,14 +399,14 @@ function viewAccounts(){
   for(const [ck,cl] of CLASSES){
     const types=typesInClass(ck).slice().sort((a,b)=>a.name.localeCompare(b.name));
     if(!types.length) continue;
-    out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="total">${fmtBal(classTotalBase(ck))}</span></div>`;
+    out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="total">${cnt(classTotalBase(ck),base(),'class:'+ck)}</span></div>`;
     types.forEach(t=>{
       const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
       const collapsed=!!UI.collapsed[t.id];
       out+=`<div class="typehead${collapsed?' collapsed':''}">
         <button class="iconbtn chev" data-action="toggle-type" data-id="${t.id}" title="${collapsed?'Expand':'Collapse'}" aria-expanded="${!collapsed}">${I.chev}</button>
         <span class="tname" data-action="toggle-type" data-id="${t.id}">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
-        <span class="ttotal num">${fmtBal(typeBalanceBase(t.id))}${accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
+        <span class="ttotal num">${cnt(typeBalanceBase(t.id),base(),'type:'+t.id)}${accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
         <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
         <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
         <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button>
@@ -420,7 +416,7 @@ function viewAccounts(){
         const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
         return `<div class="arow acct">
           <span class="name">${esc(a.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
-          <span class="bal">${native}${fmtBal(baseBal)}</span>
+          <span class="bal">${native}${cnt(baseBal,base(),'acct:'+a.id)}</span>
           <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
           <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
         </div>`;
