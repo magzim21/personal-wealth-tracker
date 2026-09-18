@@ -22,8 +22,10 @@ if (!/if\s*\(\s*\/\[0-9\]\/\.test\(modelFacing\)\s*\)\s*throw/.test(html))
 
 // (A) accounts must be tokenised to letters (no id leaks); orBuildAccounts must not emit balances.
 if (!/function\s+orLetters\(/.test(html)) fail("orLetters() (letter-token references) missing");
-if (/orBuildAccounts[\s\S]{0,400}?(balance|amount|total)/i.test(html))
-  fail("orBuildAccounts appears to reference a balance/amount — the whitelist must exclude figures");
+const ba = html.match(/function\s+orBuildAccounts\(\)\{[\s\S]*?\n\}/);
+if (!ba) fail("orBuildAccounts() not found");
+if (/\b(balance|amount|total|debit|credit|rate)\b/i.test(ba[0]))
+  fail("orBuildAccounts body references a figure (balance/amount/total/debit/credit/rate) — the whitelist must exclude them");
 
 // (C) the exact sent messages must be surfaced back to the user.
 if (!/UI\.modal\.aiSent/.test(html)) fail("the sent payload must be shown to the user (aiSent preview)");
