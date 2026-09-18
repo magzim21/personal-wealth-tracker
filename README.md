@@ -110,6 +110,14 @@ key — it stays on your machine and is never exposed to the browser:
 TWELVEDATA_API_KEY=your_key node server.mjs
 ```
 
+### Local API
+
+The server exposes a small JSON API at `http://127.0.0.1:8123` — see
+[`openapi.yaml`](openapi.yaml) for the full spec (`/api/book`, `/api/location`,
+`/api/version`, `/api/rates`, `/api/pick`, `/api/ping`). It binds to loopback only and has
+no authentication: the protection is that the port isn't reachable off-machine. CI checks
+that `openapi.yaml` stays in sync with the routes (`scripts/check-openapi.mjs`).
+
 ## About the online demo
 
 The **[live demo](https://personal-wealth-tracker.maxim.run/)** (GitHub Pages) is there so

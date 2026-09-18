@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: Ledgerbook local server API
+  version: "1.0.0"
+  description: >
+    Local API served by server.mjs / server.go for the Ledgerbook app.
+    Binds to 127.0.0.1 only; there is no authentication — the protection is
+    that the port is not reachable off-machine. Treat every endpoint as
+    "trusted local caller".
+servers:
+  - url: http://127.0.0.1:8123
+    description: Local Ledgerbook server (loopback only)
+
+paths:
+  /api/ping:
+    get:
+      summary: Liveness probe
+      description: Used by the frontend to decide whether a local server is present (file backend) or not (browser storage).
+      responses:
+        "200":
+          description: Server is up
+          content:
+            text/plain:
+              schema: { type: string, example: "ok" }
+
+  /api/version:
+    get:
+      summary: App + git version of the running server
+      description: The frontend compares appVersion with its own VERSION and shows a "restart the server" modal if they differ.
+      responses:
+        "200":
+          description: Version info
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [appVersion, isRepo]
+                properties:
+                  appVersion: { type: string, example: "v41" }
+                  isRepo: { type: boolean }
+                  commit: { type: string, nullable: true, example: "195f229" }
+                  tag: { type: string, nullable: true, example: "v1.11.0" }
+                  dirty: { type: boolean, nullable: true }
+
+  /api/location:
+    get:
+      summary: Current ledger + snapshot locations and preset defaults
+      responses:
+        "200":
+          description: Where data lives right now
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Location" }
+    put:
+      summary: Change the ledger file and/or snapshots folder (persisted to config.json)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ledgerPath: { type: string, description: Absolute path to the ledger .json file }
+                snapshotDir: { type: string, description: Absolute path to the snapshots folder }
+      responses:
+        "200":
+          description: New location applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ledgerPath: { type: string }
+                  snapshotDir: { type: string }
+                  ledgerExists: { type: boolean }
+        "400":
+          description: Path was not absolute
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/book:
+    get:
+      summary: Read the whole ledger
+      description: Returns the ledger JSON, or the literal null if no file exists yet.
+      responses:
+        "200":
+          description: The ledger (or null)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/Ledger" }
+                  - { type: "null" }
+    put:
+      summary: Write the whole ledger
+      description: Overwrites the ledger file and writes a deduped snapshot to the snapshots folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Ledger" }
+      responses:
+        "204": { description: Saved (no content) }
+        "500": { description: Write error }
+
+  /api/rates:
+    get:
+      summary: Exchange-rate lookup (proxied)
+      description: Uses TWELVEDATA_API_KEY if set, else a free fiat source. Server-side call keeps the key off the browser.
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema: { type: string, example: "EUR/USD" }
+      responses:
+        "200":
+          description: Rate for the symbol
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  symbol: { type: string, example: "EUR/USD" }
+                  rate: { type: number, example: 1.0837 }
+        "502": { description: Upstream error }
+
+  /api/pick:
+    get:
+      summary: Native macOS file/folder chooser (via osascript)
+      description: Opens a native dialog on the machine running the server. Returns the chosen POSIX path, or cancelled=true.
+      parameters:
+        - in: query
+          name: kind
+          schema: { type: string, enum: [file, folder], default: folder }
+      responses:
+        "200":
+          description: Chosen path or cancellation
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties: { path: { type: string, example: "/Users/you/Desktop/ledger.json" } }
+                  - type: object
+                    properties: { cancelled: { type: boolean, example: true } }
+
+  /:
+    get:
+      summary: Serve the app (index.html) and static files
+      description: Sends a no-store cache header so a browser refresh always gets the latest.
+      responses:
+        "200":
+          description: HTML/JS/asset
+          content:
+            text/html: { schema: { type: string } }
+        "404": { description: Not found }
+
+components:
+  schemas:
+    Location:
+      type: object
+      properties:
+        ledgerPath: { type: string }
+        snapshotDir: { type: string }
+        ledgerExists: { type: boolean }
+        defaults:
+          type: object
+          properties:
+            icloud: { type: string }
+            home: { type: string }
+            cwd: { type: string }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    Ledger:
+      type: object
+      description: The whole double-entry book. accountId values on lines reference accounts[].id.
+      required: [types, accounts, transactions, settings]
+      properties:
+        schemaVersion: { type: integer, example: 1 }
+        types:
+          type: array
+          items:
+            type: object
+            required: [id, name, class]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              class: { type: string, enum: [asset, liability, equity] }
+              comment: { type: string }
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [id, name, typeId, currency]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              typeId: { type: string }
+              currency: { type: string, example: "USD" }
+              comment: { type: string }
+        transactions:
+          type: array
+          items:
+            type: object
+            required: [id, date, description, lines]
+            properties:
+              id: { type: string }
+              date: { type: string, format: date }
+              description: { type: string }
+              comment: { type: string }
+              lines:
+                type: array
+                items:
+                  type: object
+                  required: [accountId, debit, credit]
+                  properties:
+                    accountId: { type: string }
+                    debit: { type: number }
+                    credit: { type: number }
+        settings:
+          type: object
+          properties:
+            currency: { type: string, example: "USD" }
+            rates:
+              type: object
+              additionalProperties: { type: number }
+            ratesUpdated: { type: string }
+            theme: { type: string, enum: [auto, light, dark] }

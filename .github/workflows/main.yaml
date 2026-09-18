@@ -40,6 +40,10 @@ jobs:
       - name: Smoke test
         run: node scripts/smoke-test.mjs
 
+      # 2b. OpenAPI spec must match the server's /api routes
+      - name: OpenAPI in sync
+        run: node scripts/check-openapi.mjs
+
       # 3a. accidental ledger / sensitive data
       - name: No personal-finance data committed
         run: bash scripts/check-no-financial-data.sh
