@@ -27,7 +27,7 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v36" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const appVersion = "v37" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
 
 func home() string { h, _ := os.UserHomeDir(); return h }
@@ -160,7 +160,7 @@ func main() {
 		kind := r.URL.Query().Get("kind")
 		script := `POSIX path of (choose folder with prompt "Choose a folder")`
 		if kind == "file" {
-			script = `POSIX path of (choose file with prompt "Locate your ledger file" of type {"json"})`
+			script = `POSIX path of (choose file with prompt "Locate your ledger file")`
 		}
 		out, err := exec.Command("osascript", "-e", script).Output()
 		if err != nil {

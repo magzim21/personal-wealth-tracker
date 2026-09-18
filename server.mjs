@@ -14,7 +14,7 @@ import { dirname, join } from "path";
 import { execSync, execFileSync } from "child_process";
 
 const PROJECT = "personal-wealth-tracker";
-const APP_VERSION = "v36"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const APP_VERSION = "v37"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = process.env.PWT_CONFIG_DIR || join(homedir(), "Library", "Application Support", "PersonalWealthTracker");
@@ -74,7 +74,7 @@ createServer(async (req, res) => {
     // Native macOS chooser via osascript (works because the server runs on the user's Mac).
     const kind = u.searchParams.get("kind") || "folder";
     const script = kind === "file"
-      ? 'POSIX path of (choose file with prompt "Locate your ledger file" of type {"json"})'
+      ? 'POSIX path of (choose file with prompt "Locate your ledger file")'
       : 'POSIX path of (choose folder with prompt "Choose a folder")';
     try {
       const p = execFileSync("osascript", ["-e", script], { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
