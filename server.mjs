@@ -15,7 +15,7 @@ import { execSync, execFileSync } from "child_process";
 import { createHash } from "crypto";
 
 const PROJECT = "personal-wealth-tracker";
-const APP_VERSION = "v53"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const APP_VERSION = "v54"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = process.env.PWT_CONFIG_DIR || join(process.cwd(), ".pwt"); // project-local (git-ignored), not a hidden system folder
