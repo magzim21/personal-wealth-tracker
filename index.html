@@ -987,11 +987,22 @@ function updateBal(){
 }
 
 /* ---- actions ---- */
+/* ---- hash routing: the URL reflects the current view; an account register gets a shareable
+   canonical URL (#/account/<id>). Hash (not real paths) so it works on any static host —
+   local server, the Claude artifact, and GitHub Pages — with no server-side rewrites. ---- */
+function applyHash(){
+  const parts=(location.hash||"").replace(/^#\/?/,"").split("/");
+  if(parts[0]==="ledger"){ UI.view="ledger"; }
+  else if(parts[0]==="account"&&parts[1]){ const id=decodeURIComponent(parts[1]); if(acctById(id)){ UI.view="account"; UI.accountId=id; } else { UI.view="accounts"; } }
+  else { UI.view="accounts"; }
+}
+function goHash(h){ if(location.hash===h){ render(); } else { location.hash=h; } } // set URL → hashchange re-renders; force a render if it's already there
+window.addEventListener("hashchange",()=>{ applyHash(); render(); });
 document.addEventListener("click",e=>{
   const el=e.target.closest("[data-action]"); if(!el) return;
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
-    case "tab": UI.view=el.dataset.view; render(); break;
+    case "tab": goHash(el.dataset.view==="ledger"?"#/ledger":"#/accounts"); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
@@ -1008,7 +1019,7 @@ document.addEventListener("click",e=>{
     case "edit-acct": acctModal(acctById(id)); break;
     case "del-acct": delAccount(id); break;
     case "new-tx": txModal(null); break;
-    case "open-account": UI.view="account"; UI.accountId=id; render(); break;
+    case "open-account": goHash("#/account/"+encodeURIComponent(id)); break;
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; render(); break;
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
@@ -1218,6 +1229,7 @@ function renderSchemaBlock(fileVer){
     if(!GITINFO || GITINFO.appVersion!==VERSION){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null}; }  // frontend/backend mismatch → prompt restart
   }
   STORE.save(S,"silent");   // persist any migration, but never clobber a file that moved under us at boot
+  applyHash();              // honor a shared/bookmarked URL (e.g. #/account/<id>) on first load
   render();
   renderModal();
 })();
