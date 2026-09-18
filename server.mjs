@@ -12,9 +12,10 @@ import { existsSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { execSync, execFileSync } from "child_process";
+import { createHash } from "crypto";
 
 const PROJECT = "personal-wealth-tracker";
-const APP_VERSION = "v41"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const APP_VERSION = "v42"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = process.env.PWT_CONFIG_DIR || join(homedir(), "Library", "Application Support", "PersonalWealthTracker");
@@ -58,6 +59,11 @@ async function writeSnapshot(body) {
 
 const body = (req) => new Promise((r) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => r(b)); });
 const json = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+// Optimistic-concurrency token: a version tag derived from the file's bytes. Changes on every
+// save, so a client that PUTs with a stale If-Match is refused (409) — a stale in-memory copy
+// (e.g. a background tab's beforeunload flush) can never clobber a fresher file on disk.
+const etagOf = (buf) => '"' + createHash("sha256").update(buf).digest("hex").slice(0, 16) + '"';
+const NULL = Buffer.from("null");
 
 createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
@@ -113,15 +119,27 @@ createServer(async (req, res) => {
 
   if (u.pathname === "/api/book") {
     if (req.method === "GET") {
-      try { const d = await readFile(LEDGER); res.writeHead(200, { "content-type": "application/json" }); res.end(d); }
-      catch { res.writeHead(200, { "content-type": "application/json" }); res.end("null"); }
-      return;
+      let d; try { d = await readFile(LEDGER); } catch { d = NULL; }
+      res.writeHead(200, { "content-type": "application/json", "etag": etagOf(d) });
+      return res.end(d);
     }
     if (req.method === "PUT") {
+      // Optimistic concurrency: if the client sent the revision it edited (If-Match), the file
+      // on disk must still be at that revision. If it moved on (a newer write landed first),
+      // refuse with 409 and leave the file untouched — the fresher version wins.
+      const ifMatch = req.headers["if-match"];
+      if (ifMatch) {
+        let cur; try { cur = await readFile(LEDGER); } catch { cur = NULL; }
+        const curTag = etagOf(cur);
+        if (ifMatch !== curTag) {
+          res.writeHead(409, { "content-type": "application/json", "etag": curTag });
+          return res.end(JSON.stringify({ error: "conflict", message: "The ledger on disk is newer than the version you edited." }));
+        }
+      }
       const b = await body(req);
       try { await mkdir(dirname(LEDGER), { recursive: true }); await writeFile(LEDGER, b); } catch (e) { res.writeHead(500); return res.end(String(e)); }
       writeSnapshot(b);
-      res.writeHead(204); return res.end();
+      res.writeHead(204, { "etag": etagOf(Buffer.from(b)) }); return res.end();
     }
   }
 

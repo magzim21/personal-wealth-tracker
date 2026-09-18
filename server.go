@@ -6,6 +6,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -27,8 +29,13 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v41" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const appVersion = "v42" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
+
+// etagOf is an optimistic-concurrency token derived from the file's bytes: it changes on every
+// save, so a PUT with a stale If-Match is refused (409) and a stale in-memory copy can never
+// clobber a fresher file on disk.
+func etagOf(b []byte) string { s := sha256.Sum256(b); return `"` + hex.EncodeToString(s[:])[:16] + `"` }
 
 func home() string { h, _ := os.UserHomeDir(); return h }
 
@@ -243,17 +250,31 @@ func main() {
 	mux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			if data, err := os.ReadFile(ledger); err == nil {
-				w.Write(data)
-			} else {
-				w.Write([]byte("null"))
+			data, err := os.ReadFile(ledger)
+			if err != nil {
+				data = []byte("null")
 			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("ETag", etagOf(data))
+			w.Write(data)
 		case http.MethodPut:
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				http.Error(w, "read error", 400)
 				return
+			}
+			// Optimistic concurrency: if the client sent the revision it edited (If-Match), the
+			// file on disk must still be at that revision, else refuse (409) and leave it untouched.
+			if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
+				cur, e := os.ReadFile(ledger)
+				if e != nil {
+					cur = []byte("null")
+				}
+				if ifMatch != etagOf(cur) {
+					w.Header().Set("ETag", etagOf(cur))
+					writeJSON(w, 409, map[string]string{"error": "conflict", "message": "The ledger on disk is newer than the version you edited."})
+					return
+				}
 			}
 			if err := os.MkdirAll(filepath.Dir(ledger), 0o755); err != nil {
 				http.Error(w, "mkdir error", 500)
@@ -264,6 +285,7 @@ func main() {
 				return
 			}
 			writeSnapshot(body)
+			w.Header().Set("ETag", etagOf(body))
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.Error(w, "method not allowed", 405)

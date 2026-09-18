@@ -82,10 +82,17 @@ paths:
   /api/book:
     get:
       summary: Read the whole ledger
-      description: Returns the ledger JSON, or the literal null if no file exists yet.
+      description: >
+        Returns the ledger JSON, or the literal null if no file exists yet. The ETag response
+        header is the file's current revision — the client keeps it and sends it back as If-Match
+        on the next write (optimistic concurrency).
       responses:
         "200":
           description: The ledger (or null)
+          headers:
+            ETag:
+              description: Opaque revision token of the returned file (send back as If-Match on PUT).
+              schema: { type: string, example: '"9f2a1c4b8e0d7a63"' }
           content:
             application/json:
               schema:
@@ -94,14 +101,38 @@ paths:
                   - { type: "null" }
     put:
       summary: Write the whole ledger
-      description: Overwrites the ledger file and writes a deduped snapshot to the snapshots folder.
+      description: >
+        Overwrites the ledger file and writes a deduped snapshot to the snapshots folder.
+        If an If-Match header is sent, the file on disk must still be at that revision, otherwise
+        the write is refused with 409 and the file is left untouched — the fresher version wins.
+        Omitting If-Match forces an unconditional overwrite.
+      parameters:
+        - in: header
+          name: If-Match
+          required: false
+          description: Revision the client last read (the ETag from GET). Omit to overwrite unconditionally.
+          schema: { type: string, example: '"9f2a1c4b8e0d7a63"' }
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/Ledger" }
       responses:
-        "204": { description: Saved (no content) }
+        "204":
+          description: Saved (no content)
+          headers:
+            ETag:
+              description: New revision token of the just-written file.
+              schema: { type: string, example: '"1b7e3d9a2c4f6058"' }
+        "409":
+          description: Conflict — the file on disk is newer than the If-Match revision; not written.
+          headers:
+            ETag:
+              description: Current revision on disk (what the client should reconcile against).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "500": { description: Write error }
 
   /api/rates:
@@ -174,6 +205,7 @@ components:
       type: object
       properties:
         error: { type: string }
+        message: { type: string }
     Ledger:
       type: object
       description: The whole double-entry book. accountId values on lines reference accounts[].id.
