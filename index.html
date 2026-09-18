@@ -239,13 +239,20 @@ const KEY="ledgerbook.min.v1";
 const VERSION="v42", UPDATED="2026-09-18";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
-const SCHEMA=1;   // data-shape version. A file with a higher number was written by a newer app → refuse to load.
+const SCHEMA=2;   // data-shape version. A file with a higher number was written by a newer app → refuse to load.
+                  // v2: each transaction carries an immutable createdAt (booking timestamp), distinct from its (editable) date.
 const PROJECT="personal-wealth-tracker";
 function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
   const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   return `${PROJECT}_${ts}_${COMMIT}.${ext}`; }   // sortable: project _ YYYYMMDD-HHMMSS _ commit
 const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
 
+// Local calendar date/time (NOT UTC): a transaction posted Friday evening must be dated Friday,
+// even after UTC has rolled over to Saturday. toISOString() is UTC and caused future-dated entries.
+const todayLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;};
+const nowLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+// render a stored createdAt (ISO instant) in the viewer's local time
+const fmtCreated=iso=>{ try{ return new Date(iso).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(_){ return String(iso||""); } };
 function seed(){
   // Start empty — no sample accounts, types, or transactions. A fresh book.
   return {types:[],accounts:[],transactions:[],settings:{currency:"USD",rates:{USD:1},ratesUpdated:""}};
@@ -314,7 +321,7 @@ const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledge
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
 function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; } }catch(e){} }
 function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed})); }catch(e){} }
-const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
+const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
   if(!S.settings) S.settings={currency:"USD"};
@@ -323,6 +330,9 @@ function normalizeState(){
   S.accounts.forEach(a=>{ if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
   if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
   if(!["auto","light","dark"].includes(S.settings.theme)) S.settings.theme="auto";
+  // v2 backfill: give any pre-existing transaction a createdAt. We don't know the real booking
+  // instant, so proxy it from the transaction date (noon local, to stay on the same calendar day).
+  S.transactions.forEach(t=>{ if(!t.createdAt) t.createdAt=new Date((t.date||"1970-01-01")+"T12:00:00").toISOString(); });
   S.schemaVersion=SCHEMA;   // stamp the data-shape version this app writes
 }
 const THEMES=[["auto","Auto"],["light","Light"],["dark","Dark"]];
@@ -482,9 +492,11 @@ function sortTxs(arr){
   const byDate=(a,b)=>a.date<b.date?-1:(a.date>b.date?1:0);
   const byAddDesc=(a,b)=>(ord.get(b.id)??0)-(ord.get(a.id)??0); // most-recently-added first
   const byAddAsc =(a,b)=>(ord.get(a.id)??0)-(ord.get(b.id)??0);
+  const cAt=t=>t.createdAt||""; const byCreatedDesc=(a,b)=>(cAt(a)<cAt(b)?1:cAt(a)>cAt(b)?-1:0); // newest booking instant first
   arr.sort((a,b)=>{
     switch(s){
       case "date-asc":    return byDate(a,b) || byAddAsc(a,b);
+      case "added-desc":  return byCreatedDesc(a,b) || byAddDesc(a,b); // by createdAt (booking instant), then insertion order
       case "amount-desc": return (txAmount(b)-txAmount(a)) || byDate(b,a) || byAddDesc(a,b);
       case "amount-asc":  return (txAmount(a)-txAmount(b)) || byDate(a,b) || byAddDesc(a,b);
       case "alpha":       return (a.description||"").localeCompare(b.description||"") || byDate(b,a) || byAddDesc(a,b);
@@ -712,7 +724,7 @@ function acctModal(existing,presetTypeId){
 }
 /* ---- transaction modal ---- */
 function txModal(existing){
-  const t=existing||{date:new Date().toISOString().slice(0,10),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
+  const t=existing||{date:todayLocal(),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
   UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
   renderModal();
 }
@@ -862,6 +874,7 @@ go run server.go          # Go</pre>
         </div>
         <div class="balrow" id="balrow"></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="tx-comment" rows="2" placeholder="Notes about this entry">${esc(d.comment||"")}</textarea></label>
+        ${UI.modal.id&&d.createdAt?`<div class="muted" style="font-size:11.5px;margin-top:-2px">Entered ${esc(fmtCreated(d.createdAt))}</div>`:""}
       </div>
       <div class="modal-f">${UI.modal.id?`<button class="btn" data-action="del-tx-modal" style="color:var(--neg)">${I.trash}Delete</button>`:""}<div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-tx" id="save-tx">Save</button></div>
     </div></div>`;
@@ -1015,7 +1028,7 @@ async function fetchRates(){
       }
     }
     S.settings.rates.USD=1;
-    if(ok) S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    if(ok) S.settings.ratesUpdated=nowLocal();
     UI.rateStatus = stop ? rateErrMsg(stop)
       : ok ? `Updated ${ok} rate${ok>1?"s":""} from Twelve Data ✓${fail?` — ${fail} not found`:""}`
       : "No rates returned. Check the currency codes, or edit rates below.";
@@ -1033,7 +1046,7 @@ async function fetchRates(){
       }catch(e){ fail++; }
     }
     S.settings.rates.USD=1;
-    if(ok) S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    if(ok) S.settings.ratesUpdated=nowLocal();
     UI.rateStatus = ok ? `Updated ${ok} rate${ok>1?"s":""} ✓${fail?` — ${fail} not found (crypto/metals need TWELVEDATA_API_KEY on the server)`:""}`
                        : "No rates — check the app is online. Crypto/metals need TWELVEDATA_API_KEY on the server.";
     save(); renderModal(); render(); return;
@@ -1043,7 +1056,7 @@ async function fetchRates(){
     const res=await fetch("https://open.er-api.com/v6/latest/USD",{cache:"no-store"});
     if(!res.ok) throw 0; const j=await res.json(); if(!j||!j.rates) throw 0;
     let ok=0; targets.forEach(cur=>{ if(j.rates[cur]){ S.settings.rates[cur]=round4(1/j.rates[cur]); ok++; } });
-    S.settings.rates.USD=1; S.settings.ratesUpdated=new Date().toISOString().slice(0,16).replace("T"," ");
+    S.settings.rates.USD=1; S.settings.ratesUpdated=nowLocal();
     UI.rateStatus = ok?`Updated ${ok} fiat rate${ok>1?"s":""} ✓`:"No rates returned. Edit rates below.";
   }catch(err){ UI.rateStatus="No rate source in this view. Edit rates below."; }
   save(); renderModal(); render();
@@ -1096,7 +1109,10 @@ function saveTx(){
   if(lines.length<2){ toast("A transaction needs at least two lines with an account and an amount."); return; }
   const seen=new Set();
   if(lines.some(l=>seen.has(l.accountId)||(seen.add(l.accountId),false))){ toast("The same account can't be on two lines of one entry."); return; }
-  const tx={id:UI.modal.id||uid(),date:d.date,description:(d.description||"").trim()||"(no description)",lines:lines.map(l=>({accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0)}))};
+  const prev=UI.modal.id?S.transactions.find(t=>t.id===UI.modal.id):null;
+  const tx={id:UI.modal.id||uid(),date:d.date,description:(d.description||"").trim()||"(no description)",
+    createdAt:(prev&&prev.createdAt)||new Date().toISOString(),   // immutable booking instant: preserved on edit, set once on create
+    lines:lines.map(l=>({accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0)}))};
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
   if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id);S.transactions[idx]=tx;}
   else S.transactions.push(tx);
