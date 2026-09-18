@@ -40,10 +40,8 @@
   --shadow-lift:0 16px 48px -12px rgba(0,0,0,.7);
 }
 *{box-sizing:border-box}
-html,body{margin:0}
-/* the sidebar is 224px wide: paint html to match so the overscroll rubber-band shows the layout
-   continuing (surface under the sidebar, paper under the content) instead of a bare seam */
-html{background:linear-gradient(to right,var(--surface) 0,var(--surface) 224px,var(--paper) 224px)}
+html,body{margin:0;overscroll-behavior:none}   /* no rubber-band, so no bare seam past the content */
+html{background:var(--paper)}
 body{background:var(--paper);color:var(--ink);font-family:var(--fs-sans);line-height:1.45;-webkit-font-smoothing:antialiased}
 h1,h2,h3{margin:0;font-family:var(--fs-display);font-weight:600;letter-spacing:-.01em}
 button{font-family:inherit;cursor:pointer}
@@ -315,7 +313,6 @@ button[data-tip],a[data-tip]{cursor:pointer}
 
 @media (max-width:640px){
   .app{grid-template-columns:1fr}
-  html{background:var(--paper)}   /* sidebar stacks on top here, so drop the 224px split */
   .side{position:static;height:auto;flex-direction:row;align-items:center;gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
   .nav{flex-direction:row}
   .nav button{white-space:nowrap}
