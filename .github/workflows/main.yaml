@@ -44,6 +44,10 @@ jobs:
       - name: OpenAPI in sync
         run: node scripts/check-openapi.mjs
 
+      # 2c. AI feature must never be able to send figures to the model
+      - name: AI redaction gates intact
+        run: node scripts/check-ai-redaction.mjs
+
       # 3a. accidental ledger / sensitive data
       - name: No personal-finance data committed
         run: bash scripts/check-no-financial-data.sh
