@@ -94,9 +94,18 @@ input,select{font-family:inherit;color:var(--ink)}
    never rendered at all unless a widget is switched on in Settings (so the layout is unchanged
    for anyone who leaves them off). ---- */
 .rail{display:none}
+.railtoggle{display:none}
 @media (min-width:1280px){
-  .app.has-rail{grid-template-columns:224px minmax(0,1fr) 300px}
+  .app.has-rail{grid-template-columns:224px minmax(0,1fr) 300px;transition:grid-template-columns .3s cubic-bezier(.4,0,.2,1)}
+  .app.has-rail.rail-collapsed{grid-template-columns:224px minmax(0,1fr) 0}
   .app.has-rail .rail{display:flex;flex-direction:column;gap:14px;padding:20px 16px 30px;border-left:1px solid var(--line);position:sticky;top:0;height:100dvh;overflow:auto}
+  .app.has-rail.rail-collapsed .rail{padding-left:0;padding-right:0;border-left-color:transparent}
+  /* the collapse tab rides the panel's left edge and slides to the screen edge when closed */
+  .app.has-rail .railtoggle{display:flex;align-items:center;justify-content:center;position:fixed;top:50%;transform:translateY(-50%);right:300px;width:22px;height:54px;margin-right:-1px;background:var(--surface);border:1px solid var(--line);border-right:0;border-radius:9px 0 0 9px;color:var(--muted);cursor:pointer;z-index:40;box-shadow:var(--shadow);transition:right .3s cubic-bezier(.4,0,.2,1),background .15s,color .15s}
+  .app.has-rail .railtoggle:hover{color:var(--accent);background:var(--surface-2)}
+  .app.has-rail.rail-collapsed .railtoggle{right:0}
+  .app.has-rail .railtoggle svg{width:16px;height:16px;transform:rotate(-90deg);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+  .app.has-rail.rail-collapsed .railtoggle svg{transform:rotate(90deg)}
 }
 .railcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 15px}
 .railcard .rt{font-size:10.5px;font-weight:600;letter-spacing:.055em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:6px}
@@ -589,8 +598,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===true) UI.fxRail=true; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail===true,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||""})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===true) UI.fxRail=true; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; if(p&&p.railCollapsed===true) UI.railCollapsed=true; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail===true,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||"",railCollapsed:UI.railCollapsed===true})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -707,7 +716,7 @@ const I={
 
 function render(){
   document.getElementById("app").innerHTML=`
-  <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}${S.settings.density==="compact"?" dense":""}">
+  <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}${(railOn()&&UI.railCollapsed)?" rail-collapsed":""}${S.settings.density==="compact"?" dense":""}">
     <aside class="side">
       <div class="brand" data-action="go-home" role="button" tabindex="0" title="Home"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav${["dashboard","about"].includes(UI.view)?" more-open":""}">
@@ -741,7 +750,8 @@ function render(){
       ${warnBanner()}
       <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="about"?viewAbout():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
-    ${railOn()?`<aside class="rail" id="rail">${viewRail()}</aside>`:""}
+    ${railOn()?`<aside class="rail" id="rail">${viewRail()}</aside>
+    <button class="railtoggle" data-action="toggle-rail" aria-label="${UI.railCollapsed?"Show widgets":"Hide widgets"}" data-tip="${UI.railCollapsed?"Show the widget panel":"Hide the widget panel"}">${I.chev}</button>`:""}
   </div>`;
   animateCounts();
   ensureRail();
@@ -1655,6 +1665,11 @@ document.addEventListener("click",e=>{
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
     case "toggle-privacy": UI.privacy=!UI.privacy; saveUIPrefs(); render(); break;
+    case "toggle-rail": { // toggle the class on the live element so the width/tab transition animates (a full render would jump)
+      UI.railCollapsed=!UI.railCollapsed; saveUIPrefs();
+      const app=document.querySelector(".app"); if(app) app.classList.toggle("rail-collapsed", UI.railCollapsed);
+      if(app){ const t=app.querySelector(".railtoggle"); if(t){ t.setAttribute("aria-label",UI.railCollapsed?"Show widgets":"Hide widgets"); t.setAttribute("data-tip",UI.railCollapsed?"Show the widget panel":"Hide the widget panel"); } }
+      break; }
     case "tab": goHash("#/"+el.dataset.view); break;
     case "go-home": goHash("#/"+(UI.homeView||"accounts")); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
