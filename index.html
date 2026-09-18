@@ -263,6 +263,10 @@ table.register thead th{background:var(--surface-2)}
 .nav button:active{transform:scale(.98)}
 .arow.acct{transition:background .15s}
 .arow.acct:hover{background:var(--surface-2)}
+/* row controls stay hidden until the row is hovered/focused, then slide in from the right */
+.rowtools{display:inline-flex;align-items:center;gap:2px;opacity:0;transform:translateX(9px);transition:opacity .16s ease,transform .16s ease;pointer-events:none}
+.arow:hover .rowtools,.arow:focus-within .rowtools,.typehead:hover .rowtools,.typehead:focus-within .rowtools{opacity:1;transform:none;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){.rowtools{transition:opacity .16s ease;transform:none}}
 .typehead{transition:background .15s}
 .txcard{transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease}
 .txcard:hover{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
@@ -569,9 +573,9 @@ function viewAccounts(){
         <button class="iconbtn chev" data-action="toggle-type" data-id="${t.id}" title="${collapsed?'Expand':'Collapse'}" aria-expanded="${!collapsed}">${I.chev}</button>
         <span class="tname" data-action="toggle-type" data-id="${t.id}">${esc(t.name)}${t.comment?`<span class="cnote">${esc(t.comment)}</span>`:''}</span>
         <span class="ttotal num">${cnt(typeBalanceBase(t.id),base(),'type:'+t.id)}${accts.length?` <span class="tcount">${accts.length}</span>`:''}</span>
-        <button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
+        <span class="rowtools"><button class="iconbtn" data-action="add-acct-in" data-id="${t.id}" title="Add account">${I.plus}</button>
         <button class="iconbtn" data-action="edit-type" data-id="${t.id}" title="Rename type">${I.edit}</button>
-        <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button>
+        <button class="iconbtn" data-action="del-type" data-id="${t.id}" title="Delete type">${I.trash}</button></span>
       </div>`;
       const rows=accts.map(a=>{
         const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
@@ -579,8 +583,8 @@ function viewAccounts(){
         return `<div class="arow acct">
           <span class="name"><span class="acctlink" data-action="open-account" data-id="${a.id}" title="View this account's postings">${esc(a.name)}</span>${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
           <span class="bal">${native}${cnt(baseBal,base(),'acct:'+a.id)}</span>
-          <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
-          <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
+          <span class="rowtools"><button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
+          <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button></span>
         </div>`;
       }).join("")||`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No accounts</span><span></span></div>`;
       out+=`<div class="acctwrap"><div class="acctwrap-in">${rows}</div></div>`;
