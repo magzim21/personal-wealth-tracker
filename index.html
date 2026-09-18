@@ -417,8 +417,9 @@ function convert(amount,from,to){ if(from===to) return amount; return amount*rat
 function toBase(amount,cur){ return convert(amount,cur,base()); }
 function money(n,cur){
   cur=cur||base();
-  try{return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).format(n);}
-  catch(e){return n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" "+cur;}
+  const d=(S.settings&&S.settings.showCents)?2:0;   // cents hidden by default; Settings toggle turns them on
+  try{return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:d,maximumFractionDigits:d}).format(n);}
+  catch(e){return n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})+" "+cur;}
 }
 function fmt(n,cur){ return n?money(n,cur):""; }
 function fmtBal(n,cur){ return money(n,cur); }
@@ -925,6 +926,7 @@ function renderModal(){
         <div>
           <div style="${eb}">Preferences</div>
           <label class="chkrow"><input type="checkbox" id="showtime-toggle" ${S.settings.showTxTime?"checked":""}> Show transaction time <span class="muted" style="font-weight:400">— the recorded time next to each date</span></label>
+          <label class="chkrow"><input type="checkbox" id="showcents-toggle" ${S.settings.showCents?"checked":""}> Show cents <span class="muted" style="font-weight:400">— off rounds amounts to whole ${base()}</span></label>
         </div>
         <div>
           <div style="${eb}">Export</div>
@@ -1140,6 +1142,8 @@ document.addEventListener("change",e=>{
   if(tz){ S.settings.orgTimezone=tz.value; save(); render(); return; }
   const stt=e.target.closest("#showtime-toggle");
   if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
+  const scc=e.target.closest("#showcents-toggle");
+  if(scc){ S.settings.showCents=scc.checked; save(); render(); renderModal(); return; }
   const ls=e.target.closest("#ledger-sort");
   if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const la=e.target.closest("#ledger-acct");
