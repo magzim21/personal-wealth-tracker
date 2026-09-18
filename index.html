@@ -165,7 +165,7 @@ input,select{font-family:inherit;color:var(--ink)}
 .themeseg button:hover{color:var(--ink)}
 .themeseg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .main{min-width:0;display:flex;flex-direction:column}
-.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:clamp(16px,3vw,26px) clamp(16px,3vw,28px) 0}
+.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:clamp(16px,3vw,26px) clamp(16px,3vw,28px) 12px;position:sticky;top:0;z-index:30;background:var(--paper)}
 .mainhead h2{font-size:19px}
 .mainhead .grow{flex:1}
 .ver{font-family:var(--fs-mono);font-size:11.5px;color:var(--faint);text-align:right;line-height:1.5}
@@ -210,8 +210,19 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
 .grouphead{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .grouphead .ghright{display:flex;align-items:center;gap:8px}
 .grouphead h3{font-size:15px}
+/* class colour: a thin left tick keys each account block to its class (asset / liability / equity) */
+.groupwrap{--ctick:var(--line-strong)}
+.groupwrap.cls-asset{--ctick:var(--accent)} .groupwrap.cls-liability{--ctick:var(--neg)} .groupwrap.cls-equity{--ctick:#2f6db3}
+.groupwrap .acctwrap{border-left:2.5px solid var(--ctick)}
 .grouphead .total{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--muted)}
 .arow{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+/* Compact density: tighten row/card padding for people who want more on screen (Settings › Appearance) */
+.app.dense .arow{padding:6px 16px}
+.app.dense .grouphead{padding:7px 16px}
+.app.dense .typehead{padding-top:5px;padding-bottom:5px}
+.app.dense .txcard{margin-bottom:6px}
+.app.dense .txhead{padding-top:4px;padding-bottom:4px}
+.app.dense .txcard table.txlines td{padding-top:2px;padding-bottom:2px}
 .arow:last-child{border-bottom:0}
 .typehead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:color-mix(in srgb,var(--surface-2) 60%,transparent);border-bottom:1px solid var(--line)}
 .typehead .tname{flex:1;font-weight:600;font-size:12.5px}
@@ -227,7 +238,9 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
 .arow .bal .sub{margin-right:8px;font-size:12px}
 .curtag{font-family:var(--fs-mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line-strong);border-radius:4px;padding:0 4px;margin-left:4px}
 .muted{color:var(--muted)}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:22px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lift);z-index:200;max-width:90%;text-align:center}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:22px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lift);z-index:200;max-width:90%;text-align:center;display:flex;align-items:center;gap:12px;justify-content:center}
+.toast-act{background:transparent;border:0;color:var(--paper);font:inherit;font-weight:700;cursor:pointer;padding:2px 4px;border-bottom:1.5px solid currentColor;line-height:1.1}
+.toast-act:hover{opacity:.82}
 .rates{display:flex;flex-direction:column;gap:8px}
 .raterow{display:grid;grid-template-columns:70px 14px 1fr 44px;gap:8px;align-items:center}
 .raterow .rc{font-family:var(--fs-mono);font-size:13px;color:var(--muted)}
@@ -256,7 +269,13 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .txnote{padding:7px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;white-space:pre-wrap}
 
 .empty{text-align:center;padding:40px 20px;color:var(--muted);background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r)}
-.ledgertools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--muted)}
+/* rich first-run empty state: icon + what this is + one clear next step */
+.empty2{text-align:center;padding:52px 24px;background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;gap:7px}
+.empty2-ic{width:42px;height:42px;color:var(--accent);opacity:.85;margin-bottom:2px}
+.empty2-ic svg{width:100%;height:100%}
+.empty2 h3{font-size:16.5px;margin:0;color:var(--ink)}
+.empty2 p{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0 0 8px;max-width:360px}
+.ledgertools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--muted);position:sticky;top:var(--head-h,60px);z-index:6;background:var(--paper);padding:8px 0}
 .ledgertools .lfilters,.ledgertools .lsort{display:flex;align-items:center;gap:8px}
 .ledgertools .lfilters{flex:0 1 auto;min-width:0;flex-wrap:wrap}
 .ledgertools .lsort{flex:none;margin-left:auto}
@@ -670,7 +689,7 @@ const I={
 
 function render(){
   document.getElementById("app").innerHTML=`
-  <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}">
+  <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}${S.settings.density==="compact"?" dense":""}">
     <aside class="side">
       <div class="brand" data-action="go-home" role="button" tabindex="0" title="Home"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav${["dashboard","about"].includes(UI.view)?" more-open":""}">
@@ -708,6 +727,8 @@ function render(){
   </div>`;
   animateCounts();
   ensureRail();
+  // sticky section headers sit just under the sticky main header — measure it so they never overlap
+  requestAnimationFrame(()=>{ const mh=document.querySelector(".mainhead"); if(mh) document.documentElement.style.setProperty("--head-h", mh.offsetHeight+"px"); });
 }
 
 /* ---- explicit commit/migration warning banner (top of the main pane) ----
@@ -729,11 +750,14 @@ function warnBanner(){
   return `<div class="warnbanner" role="alert">${rows}</div>`;
 }
 function viewAccounts(){
+  // first run: no chart of accounts yet — explain what accounts are and give one next step
+  if(!S.types.length && !S.accounts.filter(a=>!a.deleted).length)
+    return emptyState("Set up your accounts","Start with a type like Cash, Bank, or Credit card, then add accounts under it. This chart of accounts is what your entries post to.",`<button class="btn primary" data-action="new-type" data-class="asset">${I.plus}Add your first type</button>`,I.coin);
   let out="";
   for(const [ck,cl] of CLASSES){
     // types ordered by amount, high → low (by balance magnitude in the base currency; name breaks ties)
     const types=typesInClass(ck).slice().sort((a,b)=>(Math.abs(typeBalanceBase(b.id))-Math.abs(typeBalanceBase(a.id)))||a.name.localeCompare(b.name));
-    out+=`<div class="groupwrap"><div class="grouphead"><h3>${cl}</h3><span class="ghright"><span class="total">${cnt(classTotalBase(ck),base(),'class:'+ck)}</span><button class="iconbtn" data-action="new-type" data-class="${ck}" title="Add ${esc(cl)} type">${I.plus}</button></span></div>`;
+    out+=`<div class="groupwrap cls-${ck}"><div class="grouphead"><h3>${cl}</h3><span class="ghright"><span class="total">${cnt(classTotalBase(ck),base(),'class:'+ck)}</span><button class="iconbtn" data-action="new-type" data-class="${ck}" title="Add ${esc(cl)} type">${I.plus}</button></span></div>`;
     if(!types.length) out+=`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No types yet — use + to add one</span><span></span></div>`;
     types.forEach(t=>{
       const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
@@ -914,14 +938,14 @@ function viewDashboard(){
     <div class="dash-tiles">${tiles.map(([c,l,v])=>`<div class="dtile cls-${c}"><span class="dl">${l}</span><b>${money(v)}</b></div>`).join("")}</div>
     ${rows.length?`<div class="dash-card"><div class="dch">Balances by type</div>${rows.map(r=>{const pct=Math.max(2,Math.round(Math.abs(r.v)/max*100));
        return `<div class="barrow"><span class="bl">${esc(r.name)}</span><span class="btrack"><span class="bfill cls-${r.cls}" style="width:${pct}%"></span></span><span class="bv">${money(r.v)}</span></div>`;}).join("")}</div>`
-     :`<div class="empty">No balances yet — add accounts and transactions to see your dashboard.</div>`}
+     :emptyState("Nothing to chart yet","Add a few accounts and post some transactions — your net worth, class totals, and balances by type will appear here.",`<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`,I.coin)}
   </div>`;
 }
 function viewLedger(){
   const mode=UI.ledgerMode||"entries";
   const all=S.transactions;
   const anyLog=(S.auditLog||[]).length;
-  if(!all.length && !anyLog) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
+  if(!all.length && !anyLog) return emptyState("No entries yet","Record your first transaction — every entry has a debit and an equal credit, so your books always balance.",`<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`,I.coin);
   const q=(UI.ledgerQuery||"").trim().toLowerCase();
   const af=UI.ledgerAccount||"";
   const amtOp=UI.amtOp||"", amtVal=parseFloat(UI.amtVal);
@@ -1060,6 +1084,24 @@ function viewAccount(id){
 /* ---- in-page dialogs (native alert/confirm are blocked in the sandbox) ---- */
 let toastT=null;
 function toast(msg){ const r=document.getElementById("toast-root"); if(!r) return; r.innerHTML=`<div class="toast">${esc(msg)}</div>`; clearTimeout(toastT); toastT=setTimeout(()=>{r.innerHTML="";},2800); }
+// Undo toast: the change has ALREADY been applied (append-only), and Undo appends the *compensating*
+// event that reverses it — never erasing history. `fn` performs that compensating append.
+let toastUndoFn=null;
+function undoToast(msg,fn){ const r=document.getElementById("toast-root"); if(!r){ return; } toastUndoFn=fn; r.innerHTML=`<div class="toast"><span>${esc(msg)}</span><button class="toast-act" data-action="toast-undo">Undo</button></div>`; clearTimeout(toastT); toastT=setTimeout(()=>{ r.innerHTML=""; toastUndoFn=null; },6000); }
+// A meaningful empty state: an icon, what the screen is for, and one clear next step (a CTA).
+function emptyState(title,text,btnHtml,icon){
+  return `<div class="empty2"><div class="empty2-ic">${icon||I.coin}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${btnHtml||""}</div>`;
+}
+// Soft-delete a transaction and offer an append-only Undo (which re-appends a "restore" event).
+function softDeleteTx(did){
+  const t=S.transactions.find(x=>x.id===did); if(!t) return;
+  t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description});
+  save(); render();
+  undoToast("Transaction deleted", ()=>{
+    const tt=S.transactions.find(x=>x.id===did);
+    if(tt){ delete tt.deleted; delete tt.deletedAt; logAudit("restore",did,{desc:tt.description}); save(); render(); toast("Restored"); }
+  });
+}
 /* animate the modal out, then clear it and run an optional callback */
 function dismissModal(cb){
   const ov=document.querySelector(".overlay");
@@ -1325,18 +1367,25 @@ function renderModal(){
       <div class="modal-h"><h3>Settings</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <div>
-          <div style="${eb}">Preferences</div>
-          <label class="chkrow"><input type="checkbox" id="showtime-toggle" ${S.settings.showTxTime?"checked":""}> Show transaction time <span class="muted" style="font-weight:400">— the recorded time next to each date</span></label>
-          <label class="chkrow"><input type="checkbox" id="showcents-toggle" ${S.settings.showCents?"checked":""}> Show cents <span class="muted" style="font-weight:400">— off rounds amounts to whole ${base()}</span></label>
-          <label class="sfield"><span>Time zone <span class="infodot" data-tip="Decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
-            <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
-          </label>
+          <div style="${eb}">Appearance</div>
           <div class="sfield"><span>Theme</span>
             <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
           </div>
           <div class="sfield"><span>Colors</span>
             <div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>
           </div>
+          <div class="sfield"><span>Density <span class="infodot" data-tip="Compact tightens the spacing between rows and entries so more fits on screen. Comfortable is the roomier default.">&#9432;</span></span>
+            <div class="themeseg" role="group" aria-label="Density">${[["comfortable","Comfortable"],["compact","Compact"]].map(([k,l])=>`<button class="${((S.settings.density||"comfortable")===k)?"on":""}" data-action="set-density" data-density="${k}">${l}</button>`).join("")}</div>
+          </div>
+          <label class="chkrow"><input type="checkbox" id="showcents-toggle" ${S.settings.showCents?"checked":""}> Show cents <span class="muted" style="font-weight:400">— off rounds amounts to whole ${base()}</span></label>
+          <label class="chkrow"><input type="checkbox" id="showtime-toggle" ${S.settings.showTxTime?"checked":""}> Show transaction time <span class="muted" style="font-weight:400">— the recorded time next to each date</span></label>
+        </div>
+        <div>
+          <div style="${eb}">Currency &amp; time</div>
+          <label class="sfield"><span>Time zone <span class="infodot" data-tip="Decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
+            <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
+          </label>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”.</p>
         </div>
         <div>
           <div style="${eb}">Right sidebar <span class="infodot" data-tip="Quiet extra panels in the space to the right of the page on wide screens (≥1280px). They fetch public data over the internet, but your ledger is never sent.">&#9432;</span></div>
@@ -1561,6 +1610,7 @@ document.addEventListener("click",e=>{
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
     case "set-palette": S.settings.palette=el.dataset.pal; applyPalette(); save(); render(); renderModal(); break;
+    case "set-density": S.settings.density=el.dataset.density; save(); render(); renderModal(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
       const head=el.closest(".typehead");
@@ -1602,7 +1652,8 @@ document.addEventListener("click",e=>{
     case "import-paste": doImport(document.getElementById("import-text").value); break;
     case "download-build": downloadLocalBuild(); break;
     case "edit-tx": txModal(S.transactions.find(t=>t.id===id)); break;
-    case "del-tx": { const did=id; askConfirm("Delete this transaction? It stays in the ledger (marked deleted) and can be restored.", ()=>{ const t=S.transactions.find(x=>x.id===did); if(t){ t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description}); } save(); render(); }); break; }
+    case "del-tx": { softDeleteTx(id); break; }
+    case "toast-undo": { const f=toastUndoFn; toastUndoFn=null; const r=document.getElementById("toast-root"); if(r) r.innerHTML=""; clearTimeout(toastT); if(f) f(); break; }
     case "restore-tx": { const t=S.transactions.find(x=>x.id===id); if(t){ delete t.deleted; delete t.deletedAt; logAudit("restore",id,{desc:t.description}); save(); render(); } break; }
     case "close": dismissModal(); break;
     case "overlay": if(e.target===el){ dismissModal(); } break;
@@ -1614,7 +1665,7 @@ document.addEventListener("click",e=>{
     case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); const de=document.getElementById("tx-date"); if(de) de.value=UI.modal.draft.date; break; }
     case "save-tx": saveTx(); break;
-    case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction? It stays in the ledger (marked deleted) and can be restored.", ()=>{ const t=S.transactions.find(x=>x.id===did); if(t){ t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description}); } save(); render(); }); break; }
+    case "del-tx-modal": { const did=UI.modal.id; dismissModal(); softDeleteTx(did); break; }
   }
 });
 document.addEventListener("keydown",e=>{
