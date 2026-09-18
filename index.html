@@ -64,6 +64,12 @@ input,select{font-family:inherit;color:var(--ink)}
 .nav .navitem:hover .homebtn{opacity:.7}
 .homebtn:hover{color:var(--ink)}
 .homebtn.set{opacity:1;color:var(--accent)}
+/* secondary nav items (Dashboard, About) stay hidden until the nav is hovered, or when one is active */
+.nav-more{display:flex;flex-direction:column;gap:3px;overflow:hidden;max-height:0;opacity:0;transition:max-height .22s ease,opacity .16s ease}
+.nav:hover .nav-more,.nav.more-open .nav-more{max-height:220px;opacity:1}
+.nav-hint{display:flex;justify-content:center;align-items:center;color:var(--faint);max-height:22px;opacity:.55;overflow:hidden;transition:max-height .18s ease,opacity .16s ease}
+.nav-hint svg{width:15px;height:15px}
+.nav:hover .nav-hint,.nav.more-open .nav-hint{max-height:0;opacity:0}
 /* dashboard */
 .dash{display:flex;flex-direction:column;gap:14px}
 .dash-hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:22px 24px}
@@ -370,6 +376,8 @@ button[data-tip],a[data-tip]{cursor:pointer}
 
 @media (max-width:640px){
   .app{grid-template-columns:1fr}
+  .nav-more{flex-direction:row;max-height:none;opacity:1;overflow:visible}   /* no hover on touch — show all */
+  .nav-hint{display:none}
   .side{position:static;height:auto;flex-direction:row;align-items:center;gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
   .nav{flex-direction:row}
   .nav button{white-space:nowrap}
@@ -531,8 +539,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===false) UI.fxRail=false; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail!==false,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||""})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -649,16 +657,19 @@ const I={
 
 function render(){
   document.getElementById("app").innerHTML=`
-  <div class="app${UI.privacy?" privacy":""}">
+  <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}">
     <aside class="side">
       <div class="brand"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
-      <nav class="nav">
-        ${[["accounts","Accounts"],["ledger","Ledger"],["dashboard","Dashboard"],["about","About"]].map(([v,l])=>{
-          const isHome=(UI.homeView||"accounts")===v;
-          return `<div class="navitem">
-            <button class="navlink${UI.view===v?" on":""}" data-action="tab" data-view="${v}">${l}</button>
-            <button class="homebtn${isHome?" set":""}" data-action="set-home" data-view="${v}" data-tip="${isHome?"Your homepage (opens by default)":"Make this your homepage"}" aria-label="Set as homepage">${I.home}</button>
-          </div>`;}).join("")}
+      <nav class="nav${["dashboard","about"].includes(UI.view)?" more-open":""}">
+        ${(()=>{ const item=([v,l])=>{ const isHome=(UI.homeView||"accounts")===v;
+            return `<div class="navitem">
+              <button class="navlink${UI.view===v?" on":""}" data-action="tab" data-view="${v}">${l}</button>
+              <button class="homebtn${isHome?" set":""}" data-action="set-home" data-view="${v}" data-tip="${isHome?"Your homepage (opens by default)":"Make this your homepage"}" aria-label="Set as homepage">${I.home}</button>
+            </div>`; };
+          return [["accounts","Accounts"],["ledger","Ledger"]].map(item).join("")
+            + `<div class="nav-more">${[["dashboard","Dashboard"],["about","About"]].map(item).join("")}</div>`
+            + `<div class="nav-hint" aria-hidden="true">${I.chev}</div>`;
+        })()}
       </nav>
       <div class="side-foot">
         <label class="curpick"><span>Currency</span>
@@ -680,8 +691,10 @@ function render(){
       ${warnBanner()}
       <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="about"?viewAbout():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
+    ${railOn()?`<aside class="rail" id="rail">${viewRail()}</aside>`:""}
   </div>`;
   animateCounts();
+  ensureRail();
 }
 
 /* ---- explicit commit/migration warning banner (top of the main pane) ----
@@ -792,7 +805,7 @@ function viewAbout(){
     <section class="lp-sec">
       <p class="lp-kicker">02 — It stays on your computer</p>
       <h2>Local-first, and actually private.</h2>
-      <p class="lp-p">Your books are one plain JSON file on your machine — point it at a local disk, a mounted drive, or your iCloud folder so it follows you between computers. No sign-up, no server holding your data, no telemetry. The <em>only</em> time Ledgerbook touches the internet is an exchange-rate lookup you explicitly ask for.</p>
+      <p class="lp-p">Your books are one plain JSON file on your machine — point it at a local disk, a mounted drive, or your iCloud folder so it follows you between computers. No sign-up, no server holding your data, no telemetry. Ledgerbook reaches the internet only for an exchange-rate lookup you ask for and — if you switch them on — the optional sidebar panels, which send just currency and country codes, never your ledger.</p>
       <figure class="lp-fig">
         <svg viewBox="0 0 560 190" role="img" aria-label="The ledger file lives on your Mac, optionally synced by your own iCloud; nothing goes to an account, cloud service or telemetry, except an exchange-rate lookup you trigger.">
           <defs><marker id="lpA1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--accent)"/></marker><marker id="lpA1b" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--muted)"/></marker></defs>
@@ -1308,6 +1321,14 @@ function renderModal(){
           </div>
         </div>
         <div>
+          <div style="${eb}">Right sidebar <span class="infodot" data-tip="Quiet extra panels in the space to the right of the page on wide screens (≥1280px). They fetch public data over the internet, but your ledger is never sent.">&#9432;</span></div>
+          <label class="chkrow"><input type="checkbox" id="fxrail-toggle" ${fxRailOn()?"checked":""}> Currency trends <span class="muted" style="font-weight:400">— your account currencies vs ${base()}, past 6 months</span></label>
+          <label class="chkrow"><input type="checkbox" id="debtclock-toggle" ${debtClockOn()?"checked":""}> Debt clock <span class="muted" style="font-weight:400">— a playful per-citizen public-debt estimate. Off by default.</span></label>
+          ${debtClockOn()?`<label class="sfield" style="margin-top:8px"><span>Debt clock country <span class="infodot" data-tip="Defaults from your base currency. World Bank's debt series is patchy for some countries — if one has no data, the panel says so; pick another.">&#9432;</span></span>
+            <select id="debt-country">${DEBT_COUNTRIES.map(([iso,nm])=>`<option value="${iso}" ${debtCountry()===iso?"selected":""}>${esc(nm)}</option>`).join("")}</select></label>`:""}
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Only currency codes / a country code leave your machine — never balances, amounts or names.</p>
+        </div>
+        <div>
           <div style="${eb}">AI drafting (OpenRouter) <span class="infodot" data-tip="Only «Draft legs» sends anything, to OpenRouter with your key: your words and your account NAMES (every number stripped first). Account ids, amounts, balances and rates never leave — a hard check blocks the request on any digit.&#10;Privacy tip: the names ARE sent, so for more anonymity avoid identifying ones — e.g. «Frank's car» or «blue car», not the make and year.">&#9432;</span></div>
           ${orConnected()
             ? `<div class="airow"><span class="okdot">●</span> Connected<div style="flex:1"></div><button class="btn sm" data-action="or-disconnect">Disconnect</button></div>
@@ -1620,6 +1641,12 @@ document.addEventListener("change",e=>{
   if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
   const scc=e.target.closest("#showcents-toggle");
   if(scc){ S.settings.showCents=scc.checked; save(); render(); renderModal(); return; }
+  const fxr=e.target.closest("#fxrail-toggle");
+  if(fxr){ UI.fxRail=fxr.checked; saveUIPrefs(); render(); renderModal(); return; }
+  const dclk=e.target.closest("#debtclock-toggle");
+  if(dclk){ UI.debtClock=dclk.checked; saveUIPrefs(); render(); renderModal(); return; }
+  const dco=e.target.closest("#debt-country");
+  if(dco){ UI.debtCountry=dco.value; saveUIPrefs(); render(); renderModal(); return; }
   const ls=e.target.closest("#ledger-sort");
   if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const la=e.target.closest("#ledger-acct");
@@ -1763,6 +1790,134 @@ function saveTx(){
 
 function esc(s){return String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 function escAttr(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+/* ==== RIGHT RAIL: quiet "food for thought" widgets that fill the gutter to the right of the
+   860px content column on wide screens. Two independent panels, both controlled from Settings:
+     • Currency trends — each account currency vs the base over ~6 months (ECB via frankfurter.dev)
+     • Debt clock (easter egg, OFF by default) — a projected per-citizen public-debt figure for one
+       country, ticking by the second (World Bank open data)
+   These are the ONLY network use besides "Fetch live rates", and they send NOTHING about the
+   ledger: currency codes for the chart, a 2-letter country code for the debt clock. All state is a
+   UI preference (localStorage), never the ledger file — so no schema/version/API change. ==== */
+const FX_CCY=new Set(["EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","TRY","USD"]); // ECB/frankfurter coverage ∩ app currencies (AED is USD-pegged & not listed)
+const CCY_COUNTRY={USD:"US",EUR:"DE",GBP:"GB",JPY:"JP",CAD:"CA",AUD:"AU",CHF:"CH",CNY:"CN",INR:"IN",BRL:"BR",MXN:"MX",SGD:"SG",HKD:"HK",NZD:"NZ",SEK:"SE",NOK:"NO",PLN:"PL",ZAR:"ZA",AED:"AE",TRY:"TR"}; // base currency → default country for the debt clock
+const DEBT_COUNTRIES=[["US","United States"],["CA","Canada"],["GB","United Kingdom"],["UA","Ukraine"],["FI","Finland"],["DE","Germany"],["FR","France"],["IT","Italy"],["ES","Spain"],["PL","Poland"],["JP","Japan"],["CN","China"],["IN","India"],["AU","Australia"],["NZ","New Zealand"],["CH","Switzerland"],["SE","Sweden"],["NO","Norway"],["BR","Brazil"],["MX","Mexico"],["ZA","South Africa"],["TR","Türkiye"],["SG","Singapore"],["AE","United Arab Emirates"]];
+const countryName=iso=>{ const f=DEBT_COUNTRIES.find(c=>c[0]===iso); return f?f[1]:iso; };
+const debtCountry=()=> UI.debtCountry || CCY_COUNTRY[base()] || "US";
+const fxRailOn=()=> UI.fxRail!==false;      // default ON — the headline "fill the space" feature
+const debtClockOn=()=> UI.debtClock===true; // default OFF — an easter egg you opt into
+const railOn=()=> fxRailOn() || debtClockOn();
+// compact currency/number helpers for the rail (the ledger's money() rounds to whole units by default)
+function money1(v,cur){ try{ return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:2,maximumFractionDigits:4}).format(v);}catch(_){ return (+v).toFixed(2)+" "+cur; } }
+function money0(v,cur){ try{ return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:0,maximumFractionDigits:0}).format(v);}catch(_){ return Math.round(v).toLocaleString()+" "+cur; } }
+function nfmt(v){ try{ return new Intl.NumberFormat(undefined,{notation:"compact",maximumFractionDigits:1}).format(v);}catch(_){ return String(v); } }
+
+let RAIL={sig:"",fx:null,fxErr:"",debt:null,debtErr:""};
+let debtTimer=null;
+function railSig(){ const curs=[...new Set(S.accounts.map(a=>accCur(a)))].sort().join(","); return [base(),curs,fxRailOn(),debtClockOn(),debtCountry()].join("|"); }
+
+/* ---- Currency trends. Fetch the ECB series once with base=USD, then derive every cur→base cross
+   rate = (base per USD) / (cur per USD), so any supported base works without a second request. ---- */
+async function loadFx(){
+  RAIL.fx=null; RAIL.fxErr="";
+  if(!FX_CCY.has(base())){ RAIL.fxErr="Your base ("+base()+") isn't in the ECB series, so trends can't be drawn against it."; paintFx(); return; }
+  const want=[...new Set(S.accounts.map(a=>accCur(a)))].filter(c=>c!==base() && FX_CCY.has(c));
+  if(!want.length){ RAIL.fxErr="no-foreign"; paintFx(); return; }
+  const syms=[...new Set([...want,base()])].filter(c=>c!=="USD");
+  const end=new Date(), start=new Date(); start.setMonth(start.getMonth()-6);
+  const d=x=>x.toISOString().slice(0,10);
+  try{
+    const url="https://api.frankfurter.dev/v1/"+d(start)+".."+d(end)+"?base=USD"+(syms.length?"&symbols="+encodeURIComponent(syms.join(",")):"");
+    const j=await (await fetch(url,{cache:"no-store"})).json();
+    const dates=Object.keys(j.rates||{}).sort();
+    const per=(row,c)=> c==="USD"?1:(row&&row[c]);   // units of c per 1 USD on that day
+    const series=want.map(c=>{
+      const pts=dates.map(dt=>{ const row=j.rates[dt], cu=per(row,c), ba=per(row,base()); return (cu&&ba)? ba/cu : null; }).filter(v=>v!=null);
+      if(pts.length<2) return null;
+      const first=pts[0], last=pts[pts.length-1];
+      return {cur:c,pts,last,pct:(last-first)/first*100};
+    }).filter(Boolean);
+    RAIL.fx=series;
+  }catch(e){ RAIL.fxErr="Couldn't reach the rate history."; }
+  paintFx();
+}
+function sparkPath(pts,w,h){
+  const min=Math.min(...pts), max=Math.max(...pts), span=(max-min)||1, pad=2;
+  const x=i=>pts.length<2?0:i/(pts.length-1)*w, y=v=>h-pad-((v-min)/span)*(h-2*pad);
+  const line=pts.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ");
+  return {line,area:line+" L"+w+" "+h+" L0 "+h+" Z"};
+}
+function paintFx(){
+  const n=document.getElementById("rail-fx"); if(!n) return;
+  if(RAIL.fx===null && !RAIL.fxErr){ n.innerHTML='<div class="rsub">Loading…</div>'; return; }
+  if(RAIL.fxErr==="no-foreign"){ n.innerHTML='<div class="rnote">Add an account in another currency to see how it moves against '+esc(base())+'.</div>'; return; }
+  if(RAIL.fxErr){ n.innerHTML='<div class="rnote">'+esc(RAIL.fxErr)+'</div>'; return; }
+  if(!RAIL.fx.length){ n.innerHTML='<div class="rnote">No chartable currencies right now.</div>'; return; }
+  const W=110,H=24;
+  n.innerHTML='<div class="fxlist">'+RAIL.fx.map(s=>{
+    const sp=sparkPath(s.pts,W,H), up=s.pct>=0, flat=Math.abs(s.pct)<0.05;
+    return '<div class="fxrow"><span class="fxc">1 '+esc(s.cur)+'<br><small>'+money1(s.last,base())+'</small></span>'
+      +'<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><path class="area" d="'+sp.area+'"/><path d="'+sp.line+'"/></svg>'
+      +'<span class="fxd '+(flat?"":(up?"up":"dn"))+'">'+(up?"+":"−")+Math.abs(s.pct).toFixed(1)+'%</span></div>';
+  }).join("")+'</div>';
+}
+
+/* ---- Debt clock (easter egg). Central-government debt (World Bank % of GDP) × GDP gives a total in
+   USD; two most-recent common years give an annual growth rate we extrapolate to *now*, second by
+   second — the usdebtclock trick: interpolate on the client, don't poll. It's a projection, clearly
+   labelled with the source year, not a live quote. ---- */
+async function loadDebt(){
+  RAIL.debt=null; RAIL.debtErr="";
+  const iso=debtCountry();
+  const wb=async ind=>{ const j=await (await fetch("https://api.worldbank.org/v2/country/"+iso+"/indicator/"+ind+"?format=json&mrv=12",{cache:"no-store"})).json();
+    const map={}; ((Array.isArray(j)&&j[1])||[]).forEach(r=>{ if(r&&r.value!=null) map[r.date]=r.value; }); return map; };
+  try{
+    const [debtPct,gdp,pop]=await Promise.all([wb("GC.DOD.TOTL.GD.ZS"),wb("NY.GDP.MKTP.CD"),wb("SP.POP.TOTL")]);
+    const years=Object.keys(debtPct).filter(y=>gdp[y]!=null&&pop[y]!=null).map(Number).sort((a,b)=>a-b);
+    if(!years.length){ RAIL.debtErr="World Bank has no central-government-debt series for "+countryName(iso)+" — try another country."; paintDebt(); return; }
+    const totalUsd=y=>debtPct[y]/100*gdp[y];
+    const y2=years[years.length-1], y1=years.length>1?years[years.length-2]:null;
+    const v2=totalUsd(y2), perYear=(y1!=null && y2>y1)?(v2-totalUsd(y1))/(y2-y1):0;
+    RAIL.debt={iso,name:countryName(iso),year:y2,refUsd:v2,perYearUsd:perYear,pop:pop[y2],refInstant:Date.UTC(y2,6,1)};
+  }catch(e){ RAIL.debtErr="Couldn't reach World Bank."; }
+  paintDebt();
+}
+function debtNowUsd(){ const d=RAIL.debt; if(!d) return 0; return d.refUsd + d.perYearUsd*((Date.now()-d.refInstant)/1000/31557600); }
+function paintDebt(){
+  const n=document.getElementById("rail-debt"); if(!n) return;
+  if(RAIL.debt===null && !RAIL.debtErr){ n.innerHTML='<div class="rsub">Loading…</div>'; return; }
+  if(RAIL.debtErr){ n.innerHTML='<div class="rnote">'+esc(RAIL.debtErr)+'</div>'; stopDebtTick(); return; }
+  const d=RAIL.debt;
+  n.innerHTML='<div class="debtclock" id="debt-total"></div><div class="debt-pc" id="debt-pc"></div>'
+    +'<div class="rsub">Est. central-government debt, projected from World Bank data for '+d.year+'. A thought, not a live quote.</div>';
+  stopDebtTick(); tickDebt();
+  if(!window.matchMedia("(prefers-reduced-motion:reduce)").matches && d.perYearUsd>0) debtTimer=setInterval(tickDebt,1000);
+}
+function tickDebt(){
+  const d=RAIL.debt; if(!d) return;
+  const tot=document.getElementById("debt-total"), pc=document.getElementById("debt-pc");
+  if(!tot||!pc){ stopDebtTick(); return; }
+  const usd=debtNowUsd(), inBase=convert(usd,"USD",base()), whole=Math.floor(inBase), dec=Math.round((inBase-whole)*100);
+  tot.innerHTML=money0(whole,base())+'<span class="dec">.'+String(Math.min(dec,99)).padStart(2,"0")+'</span>';
+  pc.innerHTML='≈ <b>'+money1(convert(usd/d.pop,"USD",base()),base())+'</b> per citizen · '+nfmt(d.pop)+' people';
+}
+function stopDebtTick(){ if(debtTimer){ clearInterval(debtTimer); debtTimer=null; } }
+
+function viewRail(){
+  let cards="";
+  if(fxRailOn()) cards+='<div class="railcard"><div class="rt">Currency trends <span class="infodot" data-tip="Each account currency against your base ('+esc(base())+') over ~6 months — European Central Bank data via frankfurter.dev.&#10;Sent: currency codes only. Never sent: balances, amounts or account names.">&#9432;</span></div><div class="rsub">vs '+esc(base())+' · past 6 months</div><div id="rail-fx"></div></div>';
+  if(debtClockOn()) cards+='<div class="railcard"><div class="rt">Debt clock <span class="infodot" data-tip="A playful, estimated per-citizen public-debt figure, projected from World Bank open data.&#10;Sent: a 2-letter country code only. Never sent: anything about your ledger.&#10;Off by default — a bit of food for thought.">&#9432;</span></div><div class="rsub">'+esc((RAIL.debt&&RAIL.debt.name)||countryName(debtCountry()))+'</div><div id="rail-debt"></div></div>';
+  return cards;
+}
+// kick off (on input change) or repaint (on any other re-render) the rail; fetches fire only when
+// the inputs — base currency, account currencies, toggles, country — actually change.
+function ensureRail(){
+  if(!railOn()){ stopDebtTick(); RAIL={sig:"",fx:null,fxErr:"",debt:null,debtErr:""}; return; }
+  const sig=railSig();
+  if(sig!==RAIL.sig){ RAIL.sig=sig; RAIL.fx=null; RAIL.fxErr=""; RAIL.debt=null; RAIL.debtErr=""; stopDebtTick();
+    if(fxRailOn()) loadFx(); if(debtClockOn()) loadDebt(); }
+  paintFx(); paintDebt();
+}
 
 // Flush on the way out, but SILENTLY: if this tab's copy is stale, the server rejects it (409)
 // and we do nothing — a background tab must never clobber a fresher file just because it closed.
