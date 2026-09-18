@@ -1399,7 +1399,7 @@ function renderModal(){
       <div class="modal-b">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <button class="btn sm" data-action="fetch-rates">Fetch live rates</button>
-          <span class="muted" style="font-size:12px">${esc(UI.rateStatus||(S.settings.ratesUpdated?("updated "+S.settings.ratesUpdated):"value of 1 unit, in USD"))}</span>
+          <span class="muted" style="font-size:12px">${(()=>{const parts=[]; if(UI.rateStatus) parts.push(esc(UI.rateStatus)); if(S.settings.ratesUpdated) parts.push("Last fetched "+esc(S.settings.ratesUpdated)); if(!parts.length) parts.push("value of 1 unit, in USD"); return parts.join(" · ");})()}</span>
         </div>
         <div class="rates">
           ${curs.map(c=>`<div class="raterow"><span class="rc">1 ${c}</span><span class="eq">=</span>${c==="USD"?`<input type="number" value="1" disabled>`:`<input type="number" step="0.0001" data-rate="${c}" value="${rates[c]!=null?rates[c]:1}">`}<span class="rc">USD</span></div>`).join("")}
@@ -1410,7 +1410,7 @@ function renderModal(){
     </div></div>`;
   } else if(UI.modal.kind==="data"){
     const eb='font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px';
-    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:480px" role="dialog" aria-modal="true">
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:600px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>Settings</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <div>
