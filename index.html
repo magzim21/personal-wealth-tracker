@@ -251,6 +251,10 @@ table.register thead th{background:var(--surface-2)}
 .dleg-amt{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rdetail-meta{font-size:12px;color:var(--muted)}
 .chkrow{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.sfield{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;margin-top:4px}
+.sfield>span{color:var(--muted)}
+.sfield select{font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px;max-width:320px}
+.sfield .themeseg{max-width:240px}
 .chkrow input{width:auto;margin:0}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
@@ -457,7 +461,7 @@ function normalizeState(){
   S.accounts.forEach(a=>{ if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
   if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
   if(!["auto","light","dark"].includes(S.settings.theme)) S.settings.theme="auto";
-  if(!S.settings.orgTimezone) S.settings.orgTimezone=deviceTz();   // organization time zone (drives the accounting-date default)
+  // time zone: left empty means "same as my system" — orgTz() falls back to deviceTz() dynamically
   // v2 backfill: give any pre-existing transaction a createdAt. We don't know the real booking
   // instant, so proxy it from the transaction date (noon local, to stay on the same calendar day).
   S.transactions.forEach(t=>{ if(!t.createdAt) t.createdAt=new Date((t.date||"1970-01-01")+"T12:00:00").toISOString(); });
@@ -558,12 +562,6 @@ function render(){
         <label class="curpick"><span>Currency</span>
           <select id="cur-pick">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
         </label>
-        <label class="curpick" style="margin-top:10px"><span>Organization time zone <span class="infodot" data-tip="Your home time zone. It decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
-          <select id="tz-pick">${TZLIST.map(z=>`<option value="${escAttr(z)}" ${orgTz()===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
-        </label>
-        <div class="curpick" style="margin-top:10px"><span>Theme</span>
-          <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
-        </div>
         <button class="btn sm" data-action="open-rates" style="width:100%;margin-top:10px">Exchange rates</button>
         <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Settings</button>
         ${STORE!==FILE_STORE?`<button class="btn sm" data-action="download-build" style="width:100%;margin-top:8px">⤓ Desktop app (.zip)</button>`:``}
@@ -1083,6 +1081,12 @@ function renderModal(){
           <div style="${eb}">Preferences</div>
           <label class="chkrow"><input type="checkbox" id="showtime-toggle" ${S.settings.showTxTime?"checked":""}> Show transaction time <span class="muted" style="font-weight:400">— the recorded time next to each date</span></label>
           <label class="chkrow"><input type="checkbox" id="showcents-toggle" ${S.settings.showCents?"checked":""}> Show cents <span class="muted" style="font-weight:400">— off rounds amounts to whole ${base()}</span></label>
+          <label class="sfield"><span>Time zone <span class="infodot" data-tip="Decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
+            <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
+          </label>
+          <div class="sfield"><span>Theme</span>
+            <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
+          </div>
         </div>
         <div>
           <div style="${eb}">AI drafting (OpenRouter) <span class="infodot" data-tip="Only «Draft legs» sends anything, to OpenRouter with your key: your words and your account NAMES (every number stripped first). Account ids, amounts, balances and rates never leave — a hard check blocks the request on any digit.&#10;Privacy tip: the names ARE sent, so for more anonymity avoid identifying ones — e.g. «Frank's car» or «blue car», not the make and year.">&#9432;</span></div>
@@ -1247,7 +1251,7 @@ document.addEventListener("click",e=>{
   switch(a){
     case "tab": goHash("#/"+el.dataset.view); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
-    case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
+    case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
       const head=el.closest(".typehead");
@@ -1334,7 +1338,7 @@ document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
   const tz=e.target.closest("#tz-pick");
-  if(tz){ S.settings.orgTimezone=tz.value; save(); render(); return; }
+  if(tz){ S.settings.orgTimezone=tz.value; save(); render(); renderModal(); return; }
   const stt=e.target.closest("#showtime-toggle");
   if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
   const scc=e.target.closest("#showcents-toggle");
