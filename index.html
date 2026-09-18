@@ -157,6 +157,28 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .ledgertools select{width:auto;font-weight:400;color:var(--ink)}
 .ledgertools .lsearch{width:200px;max-width:46vw;font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
 .ledgertools .lcount{font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
+/* Entries / Activity mode toggle */
+.modeseg{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
+.modeseg button{border:0;background:none;color:var(--muted);font-weight:600;font-size:12px;padding:5px 12px;border-radius:5px;cursor:pointer}
+.modeseg button:hover{color:var(--ink)}
+.modeseg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+/* soft-deleted entry: muted, a small "Deleted" badge, and a Restore action (no ugly full strikethrough) */
+.txcard.deleted{opacity:.62}
+.txcard.deleted .desc{text-decoration:line-through;text-decoration-color:var(--faint)}
+.delbadge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--neg);border:1px solid var(--neg);border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:middle;text-decoration:none}
+/* activity log rows */
+.evrow{border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);box-shadow:var(--shadow);margin-bottom:7px;padding:9px 13px}
+.evrow.ev-create{border-left-color:var(--pos,#3aa76d)}
+.evrow.ev-edit{border-left-color:#b98900}
+.evrow.ev-delete{border-left-color:var(--neg)}
+.evrow.ev-restore{border-left-color:var(--muted)}
+.evhead{display:flex;align-items:center;gap:10px}
+.evtime{font-family:var(--fs-mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.evtag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--faint)}
+.evdesc{flex:1;font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-changes{margin-top:6px;padding-left:2px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.ev-changes .ev-from{text-decoration:line-through;text-decoration-color:var(--faint)}
+.ev-changes .ev-to{color:var(--ink)}
 /* account register (running-balance statement) */
 .infodot{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;font-size:11px;color:var(--faint);border:1px solid var(--line-strong);border-radius:50%;cursor:help;vertical-align:middle;font-style:normal;line-height:1}
 .infodot:hover{color:var(--ink);border-color:var(--muted)}
@@ -286,8 +308,9 @@ const KEY="ledgerbook.min.v1";
 const VERSION="v46", UPDATED="2026-09-18";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
-const SCHEMA=2;   // data-shape version. A file with a higher number was written by a newer app → refuse to load.
+const SCHEMA=3;   // data-shape version. A file with a higher number was written by a newer app → refuse to load.
                   // v2: each transaction carries an immutable createdAt (booking timestamp), distinct from its (editable) date.
+                  // v3: an append-only auditLog of create/edit/delete/restore events, and soft-deleted transactions (tx.deleted).
 const PROJECT="personal-wealth-tracker";
 function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
   const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
@@ -390,8 +413,22 @@ function normalizeState(){
   // v2 backfill: give any pre-existing transaction a createdAt. We don't know the real booking
   // instant, so proxy it from the transaction date (noon local, to stay on the same calendar day).
   S.transactions.forEach(t=>{ if(!t.createdAt) t.createdAt=new Date((t.date||"1970-01-01")+"T12:00:00").toISOString(); });
+  // v3 backfill: append-only change log. Seed a "create" event (from createdAt) for any transaction
+  // not yet represented in the log, so history isn't empty for pre-v3 books.
+  if(!Array.isArray(S.auditLog)) S.auditLog=[];
+  const logged=new Set(S.auditLog.map(e=>e.txId));
+  S.transactions.forEach(t=>{ if(!logged.has(t.id)) S.auditLog.push({ts:t.createdAt,action:"create",txId:t.id,desc:t.description}); });
   S.schemaVersion=SCHEMA;   // stamp the data-shape version this app writes
 }
+// append-only audit log: never rewrite past entries, only add.
+function logAudit(action,txId,extra){ if(!Array.isArray(S.auditLog)) S.auditLog=[]; S.auditLog.push(Object.assign({ts:new Date().toISOString(),action,txId},extra||{})); }
+function linesSummary(t){ return (t.lines||[]).map(l=>{const a=acctById(l.accountId);const isDr=(l.debit||0)>0;return (a?a.name:"—")+" "+(isDr?"Dr ":"Cr ")+money(isDr?(l.debit||0):(l.credit||0),a?accCur(a):base());}).join("; "); }
+function txDiff(a,b){ const ch=[];
+  if((a.date||"")!==(b.date||"")) ch.push({field:"date",from:a.date||"",to:b.date||""});
+  if((a.description||"")!==(b.description||"")) ch.push({field:"description",from:a.description||"",to:b.description||""});
+  if((a.comment||"")!==(b.comment||"")) ch.push({field:"comment",from:a.comment||"",to:b.comment||""});
+  const la=linesSummary(a),lb=linesSummary(b); if(la!==lb) ch.push({field:"lines",from:la,to:lb});
+  return ch; }
 const THEMES=[["auto","Auto"],["light","Light"],["dark","Dark"]];
 function applyTheme(){
   const t=(S&&S.settings&&S.settings.theme)||"auto", r=document.documentElement;
@@ -406,7 +443,7 @@ const accountsInType=tid=>S.accounts.filter(a=>a.typeId===tid);
 function balance(accId){
   const acc=acctById(accId);if(!acc)return 0;
   let net=0;
-  for(const t of S.transactions) for(const l of t.lines) if(l.accountId===accId) net+=(l.debit||0)-(l.credit||0);
+  for(const t of S.transactions){ if(t.deleted) continue; for(const l of t.lines) if(l.accountId===accId) net+=(l.debit||0)-(l.credit||0); }
   net=round2(net);
   return DEBIT_NORMAL.has(classOf(acc))?net:-net;
 }
@@ -573,43 +610,78 @@ function sortTxs(arr){
   return arr;
 }
 function viewLedger(){
+  const mode=UI.ledgerMode||"entries";
   const all=S.transactions;
-  if(!all.length) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
-  // ---- filtering: free-text (description/comment) + a single account ----
+  const anyLog=(S.auditLog||[]).length;
+  if(!all.length && !anyLog) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
   const q=(UI.ledgerQuery||"").trim().toLowerCase();
   const af=UI.ledgerAccount||"";
-  let txs=sortTxs([...all]);
-  if(q)  txs=txs.filter(t=>(t.description||"").toLowerCase().includes(q) || (t.comment||"").toLowerCase().includes(q));
-  if(af) txs=txs.filter(t=>t.lines.some(l=>l.accountId===af));
   const acctOpts=`<option value="">All accounts</option>`+
     S.accounts.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}" ${af===a.id?"selected":""}>${esc(a.name)}</option>`).join("");
   const active=!!(q||af);
-  const toolbar=`<div class="ledgertools">
-    <div class="lfilters">
-      <input id="ledger-q" class="lsearch" type="search" placeholder="Search description…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
-      <select id="ledger-acct" title="Filter by account">${acctOpts}</select>
-      ${active?`<button class="btn sm" data-action="ledger-clear">Clear</button><span class="lcount">${txs.length} of ${all.length}</span>`:""}
-    </div>
-    <div class="lsort"><span>Sort</span><select id="ledger-sort">${LEDGER_SORTS.map(([k,l])=>`<option value="${k}" ${(UI.ledgerSort||"date-desc")===k?"selected":""}>${l}</option>`).join("")}</select></div>
-  </div>`;
-  if(!txs.length) return toolbar+`<div class="empty">No transactions match this filter.</div>`;
-  return toolbar + txs.map(t=>{
-    const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
-    return `<div class="txcard">
-      <div class="txhead">
-        <span class="date">${t.date}${S.settings.showTxTime&&t.createdAt?` <span class="txtime">${esc(fmtTxTime(t.createdAt))}</span>`:""}</span>
-        <span class="desc">${esc(t.description)}</span>
-        <span class="txsum">${fmtBal(drBase)}<span class="cur">${base()}</span></span>
-        <button class="iconbtn" data-action="edit-tx" data-id="${t.id}" title="Edit">${I.edit}</button>
-        <button class="iconbtn" data-action="del-tx" data-id="${t.id}" title="Delete">${I.trash}</button>
-      </div>
-      <table class="txlines">
-        <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);
-          return `<tr><td class="acct">${a?esc(a.name):"—"}${c!==base()?` <span class="curtag">${c}</span>`:''}</td><td class="drcr">${isDr?"Dr":"Cr"}</td><td class="num">${fmt(amt,c)}</td></tr>`;}).join("")}</tbody>
-      </table>
-      ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
+  let listHtml, count, total;
+  if(mode==="activity"){
+    // Activity = the append-only change log. Fixed order (newest first) — no sort options. Filters kept.
+    const txById=id=>S.transactions.find(x=>x.id===id);
+    let ev=(S.auditLog||[]).slice().sort((a,b)=>a.ts<b.ts?1:a.ts>b.ts?-1:0);
+    total=(S.auditLog||[]).length;
+    if(q) ev=ev.filter(e=>{ const t=txById(e.txId); const hay=(e.desc||(t&&t.description)||"")+" "+(e.changes||[]).map(c=>c.field+" "+c.from+" "+c.to).join(" "); return hay.toLowerCase().includes(q); });
+    if(af) ev=ev.filter(e=>{ const t=txById(e.txId); return t&&t.lines.some(l=>l.accountId===af); });
+    count=ev.length;
+    listHtml = ev.length ? ev.map(renderEvent).join("") : `<div class="empty">No activity matches this filter.</div>`;
+  } else {
+    // Entries = the ledger, including soft-deleted rows (shown muted with a Restore action).
+    let txs=sortTxs([...all]);
+    total=all.length;
+    if(q) txs=txs.filter(t=>(t.description||"").toLowerCase().includes(q) || (t.comment||"").toLowerCase().includes(q));
+    if(af) txs=txs.filter(t=>t.lines.some(l=>l.accountId===af));
+    count=txs.length;
+    listHtml = txs.length ? txs.map(renderTxCard).join("") : `<div class="empty">No transactions match this filter.</div>`;
+  }
+  const modeSeg=`<div class="modeseg" role="group" aria-label="View">
+      <button class="${mode==="entries"?"on":""}" data-action="ledger-mode" data-mode="entries">Entries</button>
+      <button class="${mode==="activity"?"on":""}" data-action="ledger-mode" data-mode="activity">Activity</button>
     </div>`;
-  }).join("");
+  const toolbar=`<div class="ledgertools">
+    <div class="lfilters">${modeSeg}
+      <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
+      <select id="ledger-acct" title="Filter by account">${acctOpts}</select>
+      ${active?`<button class="btn sm" data-action="ledger-clear">Clear</button><span class="lcount">${count} of ${total}</span>`:""}
+    </div>
+    ${mode==="entries"
+      ? `<div class="lsort"><span>Sort</span><select id="ledger-sort">${LEDGER_SORTS.map(([k,l])=>`<option value="${k}" ${(UI.ledgerSort||"date-desc")===k?"selected":""}>${l}</option>`).join("")}</select></div>`
+      : `<div class="lsort"><span class="muted" style="font-weight:400">Newest first</span></div>`}
+  </div>`;
+  return toolbar+listHtml;
+}
+function renderTxCard(t){
+  const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
+  const del=!!t.deleted;
+  return `<div class="txcard${del?" deleted":""}">
+    <div class="txhead">
+      <span class="date">${t.date}${S.settings.showTxTime&&t.createdAt?` <span class="txtime">${esc(fmtTxTime(t.createdAt))}</span>`:""}</span>
+      <span class="desc">${esc(t.description)}${del?` <span class="delbadge">Deleted</span>`:""}</span>
+      <span class="txsum">${fmtBal(drBase)}<span class="cur">${base()}</span></span>
+      ${del?`<button class="btn sm" data-action="restore-tx" data-id="${t.id}">Restore</button>`
+           :`<button class="iconbtn" data-action="edit-tx" data-id="${t.id}" title="Edit">${I.edit}</button><button class="iconbtn" data-action="del-tx" data-id="${t.id}" title="Delete">${I.trash}</button>`}
+    </div>
+    <table class="txlines">
+      <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);
+        return `<tr><td class="acct">${a?esc(a.name):"—"}${c!==base()?` <span class="curtag">${c}</span>`:''}</td><td class="drcr">${isDr?"Dr":"Cr"}</td><td class="num">${fmt(amt,c)}</td></tr>`;}).join("")}</tbody>
+    </table>
+    ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
+  </div>`;
+}
+function renderEvent(e){
+  const t=S.transactions.find(x=>x.id===e.txId);
+  const label={create:"Created",edit:"Edited",delete:"Deleted",restore:"Restored"}[e.action]||e.action;
+  const desc=e.desc||(t?t.description:"(removed)");
+  const changes=(e.action==="edit"&&e.changes&&e.changes.length)
+    ? `<div class="ev-changes">${e.changes.map(c=>`<div><b>${esc(c.field)}</b> <span class="ev-from">${esc(String(c.from))||"∅"}</span> → <span class="ev-to">${esc(String(c.to))||"∅"}</span></div>`).join("")}</div>` : "";
+  return `<div class="evrow ev-${esc(e.action)}">
+    <div class="evhead"><span class="evtime">${esc(fmtCreated(e.ts))}</span><span class="evtag">${label}</span><span class="evdesc">${esc(desc)}</span>${t?`<button class="iconbtn" data-action="edit-tx" data-id="${e.txId}" title="Open">${I.edit}</button>`:""}</div>
+    ${changes}
+  </div>`;
 }
 
 // Account register: one account's postings with a running balance (a bank-statement view).
@@ -621,7 +693,7 @@ function viewAccount(id){
   const clsLabel=(CLASSES.find(([k])=>k===cls)||[,cls])[1];
   const ord=new Map(S.transactions.map((tx,i)=>[tx.id,i]));
   const posts=[];
-  for(const tx of S.transactions) for(const l of tx.lines) if(l.accountId===id) posts.push({tx,debit:l.debit||0,credit:l.credit||0});
+  for(const tx of S.transactions){ if(tx.deleted) continue; for(const l of tx.lines) if(l.accountId===id) posts.push({tx,debit:l.debit||0,credit:l.credit||0}); }
   // oldest → newest so the running balance accumulates in chronological order
   posts.sort((a,b)=>(a.tx.date<b.tx.date?-1:a.tx.date>b.tx.date?1:0)||((ord.get(a.tx.id)??0)-(ord.get(b.tx.id)??0)));
   let run=0;
@@ -1103,6 +1175,7 @@ document.addEventListener("click",e=>{
     case "open-account": goHash("#/account/"+encodeURIComponent(id)); break;
     case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; render(); break;
+    case "ledger-mode": UI.ledgerMode=el.dataset.mode; render(); break;
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
     case "open-data": UI.modal={kind:"data"}; renderModal(); break;
@@ -1115,7 +1188,8 @@ document.addEventListener("click",e=>{
     case "import-paste": doImport(document.getElementById("import-text").value); break;
     case "download-build": downloadLocalBuild(); break;
     case "edit-tx": txModal(S.transactions.find(t=>t.id===id)); break;
-    case "del-tx": { const did=id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
+    case "del-tx": { const did=id; askConfirm("Delete this transaction? It stays in the ledger (marked deleted) and can be restored.", ()=>{ const t=S.transactions.find(x=>x.id===did); if(t){ t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description}); } save(); render(); }); break; }
+    case "restore-tx": { const t=S.transactions.find(x=>x.id===id); if(t){ delete t.deleted; delete t.deletedAt; logAudit("restore",id,{desc:t.description}); save(); render(); } break; }
     case "close": dismissModal(); break;
     case "overlay": if(e.target===el){ dismissModal(); } break;
     case "confirm-yes": { const fn=pendingConfirm; dismissModal(fn); break; }
@@ -1125,7 +1199,7 @@ document.addEventListener("click",e=>{
     case "add-line": syncLines(); UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "save-tx": saveTx(); break;
-    case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction?", ()=>{ S.transactions=S.transactions.filter(t=>t.id!==did); save(); render(); }); break; }
+    case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction? It stays in the ledger (marked deleted) and can be restored.", ()=>{ const t=S.transactions.find(x=>x.id===did); if(t){ t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description}); } save(); render(); }); break; }
   }
 });
 document.addEventListener("keydown",e=>{
@@ -1297,8 +1371,8 @@ function saveTx(){
     createdAt:(prev&&prev.createdAt)||new Date().toISOString(),   // immutable booking instant: preserved on edit, set once on create
     lines:lines.map(l=>({accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0)}))};
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
-  if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id);S.transactions[idx]=tx;}
-  else S.transactions.push(tx);
+  if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id); if(prev&&prev.deleted){tx.deleted=prev.deleted;tx.deletedAt=prev.deletedAt;} S.transactions[idx]=tx; const ch=txDiff(prev||{},tx); if(ch.length) logAudit("edit",tx.id,{desc:tx.description,changes:ch});}
+  else { S.transactions.push(tx); logAudit("create",tx.id,{desc:tx.description}); }
   save();render();dismissModal();
 }
 
