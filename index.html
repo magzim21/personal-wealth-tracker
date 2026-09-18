@@ -184,14 +184,13 @@ table.register thead th{background:var(--surface-2)}
 .register .regrow.open>td{background:var(--surface-2)}
 .regdetail>td{padding:0;border-bottom:1px solid var(--line)}
 .rdetail{padding:10px 16px 12px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
-.rdetail-legs{display:flex;flex-direction:column;gap:4px}
+.rdetail-legs{display:flex;flex-direction:column;gap:4px;max-width:360px}
 .dleg{display:flex;align-items:center;gap:10px;font-size:13px}
-.dleg-acct{flex:1}
+.dleg-acct{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dleg.self .dleg-acct{font-weight:600}
 .dleg-drcr{font-family:var(--fs-mono);font-size:10px;color:var(--faint);width:20px;text-align:right}
-.dleg-amt{font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+.dleg-amt{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rdetail-meta{font-size:12px;color:var(--muted)}
-.rdetail-actions{display:flex}
 .chkrow{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
 .chkrow input{width:auto;margin:0}
 
@@ -639,7 +638,6 @@ function viewAccount(id){
     const detail=`<tr class="regdetail"><td colspan="6"><div class="rdetail">
       <div class="rdetail-legs">${legs}</div>
       <div class="rdetail-meta">Accounting date <b>${tx.date}</b>${tx.createdAt?` · Recorded <b>${esc(fmtCreated(tx.createdAt))}</b>`:""}${tx.comment?` · ${esc(tx.comment)}`:""}</div>
-      <div class="rdetail-actions"><button class="btn sm" data-action="edit-tx" data-id="${tx.id}">${I.edit}Edit</button></div>
     </div></td></tr>`;
     return main+detail;
   }).join("");
