@@ -40,8 +40,10 @@
   --shadow-lift:0 16px 48px -12px rgba(0,0,0,.7);
 }
 *{box-sizing:border-box}
-html,body{margin:0;overscroll-behavior:none}
-html{background:var(--paper)}
+html,body{margin:0}
+/* the sidebar is 224px wide: paint html to match so the overscroll rubber-band shows the layout
+   continuing (surface under the sidebar, paper under the content) instead of a bare seam */
+html{background:linear-gradient(to right,var(--surface) 0,var(--surface) 224px,var(--paper) 224px)}
 body{background:var(--paper);color:var(--ink);font-family:var(--fs-sans);line-height:1.45;-webkit-font-smoothing:antialiased}
 h1,h2,h3{margin:0;font-family:var(--fs-display);font-weight:600;letter-spacing:-.01em}
 button{font-family:inherit;cursor:pointer}
@@ -313,6 +315,7 @@ button[data-tip],a[data-tip]{cursor:pointer}
 
 @media (max-width:640px){
   .app{grid-template-columns:1fr}
+  html{background:var(--paper)}   /* sidebar stacks on top here, so drop the 224px split */
   .side{position:static;height:auto;flex-direction:row;align-items:center;gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
   .nav{flex-direction:row}
   .nav button{white-space:nowrap}
@@ -331,9 +334,12 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .arow.acct{transition:background .15s}
 .arow.acct:hover{background:var(--surface-2)}
 /* row controls stay hidden until the row is hovered/focused, then slide in from the right */
-.rowtools{display:inline-flex;align-items:center;gap:2px;opacity:0;transform:translateX(9px);transition:opacity .16s ease,transform .16s ease;pointer-events:none}
-.arow:hover .rowtools,.arow:focus-within .rowtools,.typehead:hover .rowtools,.typehead:focus-within .rowtools{opacity:1;transform:none;pointer-events:auto}
-@media (prefers-reduced-motion:reduce){.rowtools{transition:opacity .16s ease;transform:none}}
+/* controls collapse to zero width (so the amount sits near the right edge) and expand on hover,
+   which pushes the amount smoothly to the left to make room */
+.rowtools{display:inline-flex;align-items:center;gap:2px;width:0;overflow:hidden;opacity:0;pointer-events:none;transition:width .18s ease,opacity .14s ease}
+.arow:hover .rowtools,.arow:focus-within .rowtools{width:56px;opacity:1;pointer-events:auto}
+.typehead:hover .rowtools,.typehead:focus-within .rowtools{width:84px;opacity:1;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){.rowtools{transition:opacity .14s ease}}
 .typehead{transition:background .15s}
 .txcard{transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease}
 .txcard:hover{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
