@@ -157,6 +157,23 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .ledgertools select{width:auto;font-weight:400;color:var(--ink)}
 .ledgertools .lsearch{width:200px;max-width:46vw;font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
 .ledgertools .lcount{font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
+/* account register (running-balance statement) */
+.acctlink{cursor:pointer;border-bottom:1px dashed transparent}
+.acctlink:hover{border-bottom-color:var(--line-strong);color:var(--accent,inherit)}
+.reghead{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.reghead-main{flex:1;min-width:150px}
+.reghead-main .regtitle{font-size:17px;font-weight:700}
+.regmeta{color:var(--muted);font-size:12.5px}
+.regbal{display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+.regbal-l{color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.regbal b{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:18px}
+.regbal-sub{color:var(--muted);font-size:12px;font-family:var(--fs-mono)}
+table.register{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+table.register thead th{background:var(--surface-2)}
+.register .rdate{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.register .rbal{font-weight:600}
+.register .regrow{cursor:pointer}
+.register .regrow:hover td{background:var(--surface-2)}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
 .modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column}
@@ -418,7 +435,7 @@ function render(){
     </aside>
     <div class="main">
       <div class="mainhead">
-        <h2>${UI.view==="accounts"?"Accounts":"Ledger"}</h2>
+        <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="accounts"?"Accounts":"Ledger"}</h2>
         <div class="grow"></div>
         <span class="ver">${VERSION} · ${verInfo().label} · ${UPDATED}${verInfo().committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${verInfo().migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}</span>
         ${UI.view==="accounts"
@@ -426,7 +443,7 @@ function render(){
           : `<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
       </div>
       ${warnBanner()}
-      <div class="content">${UI.view==="accounts"?viewAccounts():viewLedger()}</div>
+      <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
   </div>`;
   animateCounts();
@@ -472,7 +489,7 @@ function viewAccounts(){
         const cur=accCur(a), baseBal=toBase(balance(a.id),cur);
         const native=(cur!==base())?`<span class="sub">${money(balance(a.id),cur)}</span> `:"";
         return `<div class="arow acct">
-          <span class="name">${esc(a.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
+          <span class="name"><span class="acctlink" data-action="open-account" data-id="${a.id}" title="View this account's postings">${esc(a.name)}</span>${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
           <span class="bal">${native}${cnt(baseBal,base(),'acct:'+a.id)}</span>
           <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
           <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button>
@@ -543,6 +560,44 @@ function viewLedger(){
       ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
     </div>`;
   }).join("");
+}
+
+// Account register: one account's postings with a running balance (a bank-statement view).
+function viewAccount(id){
+  const acc=acctById(id);
+  if(!acc){ return `<div class="empty">Account not found. <a href="#" data-action="tab" data-view="accounts">Back to Accounts</a></div>`; }
+  const cur=accCur(acc), t=typeById(acc.typeId), cls=classOf(acc);
+  const normal=DEBIT_NORMAL.has(cls);
+  const clsLabel=(CLASSES.find(([k])=>k===cls)||[,cls])[1];
+  const ord=new Map(S.transactions.map((tx,i)=>[tx.id,i]));
+  const posts=[];
+  for(const tx of S.transactions) for(const l of tx.lines) if(l.accountId===id) posts.push({tx,debit:l.debit||0,credit:l.credit||0});
+  // oldest → newest so the running balance accumulates in chronological order
+  posts.sort((a,b)=>(a.tx.date<b.tx.date?-1:a.tx.date>b.tx.date?1:0)||((ord.get(a.tx.id)??0)-(ord.get(b.tx.id)??0)));
+  let run=0;
+  posts.forEach(p=>{ p.run=round2(run+(normal?(p.debit-p.credit):(p.credit-p.debit))); run=p.run; });
+  const curBal=run;
+  const head=`<div class="reghead">
+    <button class="btn sm" data-action="tab" data-view="accounts">← Accounts</button>
+    <div class="reghead-main">
+      <div class="regtitle">${esc(acc.name)}${cur!==base()?` <span class="curtag">${cur}</span>`:""}</div>
+      <span class="regmeta">${esc(clsLabel)} · ${esc(t?t.name:"—")} · ${posts.length} posting${posts.length===1?"":"s"}</span>
+    </div>
+    <div class="regbal"><span class="regbal-l">Current balance</span><b>${money(curBal,cur)}</b>${cur!==base()?`<span class="regbal-sub">${money(toBase(curBal,cur),base())} ${base()}</span>`:""}</div>
+  </div>`;
+  if(!posts.length) return head+`<div class="empty">No postings in this account yet.</div>`;
+  // display newest first; each row's Balance is the account balance right after that entry
+  const body=posts.slice().reverse().map(p=>`<tr class="regrow" data-action="edit-tx" data-id="${p.tx.id}" title="Edit entry">
+      <td class="rdate">${p.tx.date}</td>
+      <td class="rdesc">${esc(p.tx.description)}</td>
+      <td class="num">${p.debit?money(p.debit,cur):""}</td>
+      <td class="num">${p.credit?money(p.credit,cur):""}</td>
+      <td class="num rbal">${money(p.run,cur)}</td>
+    </tr>`).join("");
+  return head+`<table class="register">
+    <thead><tr><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
 }
 
 /* ---- in-page dialogs (native alert/confirm are blocked in the sandbox) ---- */
@@ -940,6 +995,7 @@ document.addEventListener("click",e=>{
     case "edit-acct": acctModal(acctById(id)); break;
     case "del-acct": delAccount(id); break;
     case "new-tx": txModal(null); break;
+    case "open-account": UI.view="account"; UI.accountId=id; render(); break;
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; render(); break;
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
