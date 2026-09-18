@@ -74,8 +74,10 @@ find . -name '*.go' | entr -r go run server.go           # …or with entr
 ```
 
 Note: the app compares its version with the server's and shows a "restart the server" prompt
-when they differ. Bump `VERSION` in `index.html` and `APP_VERSION` in `server.mjs` together;
-editing `server.mjs` triggers the `--watch` restart, so they come back in step.
+when they differ. The version has a **single source of truth** — `const VERSION` in `index.html`;
+both servers read it from `index.html` at startup (frozen for the process), so a release changes
+**one line** and nothing drifts. The frozen value is what makes a stale, not-yet-restarted server
+detectable; restarting (or the `--watch` reload) re-reads the file and clears the prompt.
 
 ### Where your data is stored (and how to change it)
 
@@ -128,8 +130,8 @@ All schema knowledge lives in the **frontend** (`index.html`): the ledger carrie
 (and, for bigger structural changes, `migrate()`) backfills any missing/renamed fields
 *in place*, stamps the current `schemaVersion`, and saves the upgraded book back. Backfills
 are **idempotent** — they only fill what's absent — so loading an old file simply upgrades it,
-and loading it again is a no-op. To evolve the shape: add the backfill, bump `SCHEMA`, and keep
-both the app (`VERSION`) and server (`APP_VERSION`) in step.
+and loading it again is a no-op. To evolve the shape: add the backfill, bump `SCHEMA`, and bump the
+app `VERSION` in `index.html` (the servers read it from there — one place to change).
 
 Guardrails: the app **refuses to open a file written by a newer `schemaVersion`** (so an old
 build can't corrupt a newer file), the server writes a timestamped snapshot on every save, and

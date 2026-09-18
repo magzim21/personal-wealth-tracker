@@ -8,14 +8,16 @@
 // A snapshot is written on every save (deduped; newest SNAP_KEEP retained).
 import { createServer } from "http";
 import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { execSync, execFileSync } from "child_process";
 import { createHash } from "crypto";
 
 const PROJECT = "personal-wealth-tracker";
-const APP_VERSION = "v58"; // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+// Single source of truth: the version lives ONLY in index.html's VERSION. Read it once at startup
+// (frozen for this process) so the frontend can detect a stale, not-yet-restarted server.
+const APP_VERSION = (() => { try { const m = readFileSync("index.html", "utf8").match(/const VERSION="(v\d+)"/); return m ? m[1] : "unknown"; } catch { return "unknown"; } })();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = process.env.PWT_CONFIG_DIR || join(process.cwd(), ".pwt"); // project-local (git-ignored), not a hidden system folder

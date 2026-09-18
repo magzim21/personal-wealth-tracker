@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -29,8 +30,22 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v58" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
+
+// Single source of truth: the version lives ONLY in index.html's VERSION, read once at startup
+// (frozen for this process) so the frontend can detect a stale, not-yet-restarted server.
+var appVersion = readAppVersion()
+
+func readAppVersion() string {
+	b, err := os.ReadFile("index.html")
+	if err != nil {
+		return "unknown"
+	}
+	if m := regexp.MustCompile(`const VERSION="(v\d+)"`).FindSubmatch(b); m != nil {
+		return string(m[1])
+	}
+	return "unknown"
+}
 
 // etagOf is an optimistic-concurrency token derived from the file's bytes: it changes on every
 // save, so a PUT with a stale If-Match is refused (409) and a stale in-memory copy can never
