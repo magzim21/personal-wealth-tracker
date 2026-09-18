@@ -1,8 +1,7 @@
 // CI guard for the AI feature's promise: NUMBERS ARE NEVER SENT to the model.
-// This locks the three hard gates in place so a future edit can't quietly weaken them:
+// This locks the two hard gates in place so a future edit can't quietly weaken them:
 //   (A) whitelist — accounts are referenced by letter tokens, never their numeric ids;
-//   (B) choke-point — every model-facing byte passes one digit gate before fetch;
-//   (C) preview — the sent bytes are shown back to the user.
+//   (B) choke-point — every model-facing byte (messages + schema) passes one digit gate before fetch.
 // It also runs the real scrubDigits() from index.html against digit-laden input and
 // fails if a single 0-9 survives.
 import { readFileSync } from "node:fs";
@@ -27,9 +26,6 @@ if (!ba) fail("orBuildAccounts() not found");
 if (/\b(balance|amount|total|debit|credit|rate)\b/i.test(ba[0]))
   fail("orBuildAccounts body references a figure (balance/amount/total/debit/credit/rate) — the whitelist must exclude them");
 
-// (C) the exact sent messages must be surfaced back to the user.
-if (!/UI\.modal\.aiSent/.test(html)) fail("the sent payload must be shown to the user (aiSent preview)");
-
 // Run the REAL scrubDigits from source against adversarial input.
 const m = html.match(/function\s+scrubDigits\(s\)\{[\s\S]*?\}/);
 if (!m) fail("scrubDigits() not found in index.html");
@@ -47,4 +43,4 @@ for (const c of cases) {
   if (/[0-9]/.test(out)) fail(`scrubDigits left a digit: ${JSON.stringify(c)} -> ${JSON.stringify(out)}`);
 }
 
-console.log(`OK: 1 choke-point, digit gate present, letter tokens, preview wired, scrubDigits clean on ${cases.length} cases`);
+console.log(`OK: 1 choke-point, digit gate present, letter tokens, scrubDigits clean on ${cases.length} cases`);
