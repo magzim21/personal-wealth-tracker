@@ -154,8 +154,19 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .empty{text-align:center;padding:40px 20px;color:var(--muted);background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r)}
 .ledgertools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--muted)}
 .ledgertools .lfilters,.ledgertools .lsort{display:flex;align-items:center;gap:8px}
+.ledgertools .lfilters{flex:0 1 auto;min-width:0;flex-wrap:wrap}
+.ledgertools .lsort{flex:none;margin-left:auto}
 .ledgertools select{width:auto;font-weight:400;color:var(--ink)}
-.ledgertools .lsearch{width:200px;max-width:46vw;font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
+.ledgertools .lsearch{flex:1 1 150px;min-width:110px;max-width:300px;font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
+.filterbtn{display:inline-flex;align-items:center;gap:6px}
+.filterbtn svg{width:14px;height:14px}
+.filterbtn.on{border-color:var(--accent);color:var(--accent)}
+.fbadge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
+.filterpanel{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;padding:14px 16px;margin:0 0 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.ffield{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+.ffield select,.ffield input{font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
+.amtrow{display:flex;gap:6px}
+.amtrow input{width:120px}
 .ledgertools .lcount{font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
 /* Entries / Activity mode toggle */
 .modeseg{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
@@ -499,6 +510,7 @@ const I={
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>',
   chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>',
   coin:'<svg viewBox="0 0 24 24" style="width:23px;height:23px"><defs><radialGradient id="coinF" cx="37%" cy="32%" r="82%"><stop offset="0%" stop-color="#fbfcfc"/><stop offset="52%" stop-color="#d9dde1"/><stop offset="100%" stop-color="#a7adb4"/></radialGradient><linearGradient id="coinR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c7ccd1"/><stop offset="100%" stop-color="#7e848b"/></linearGradient></defs><circle cx="12" cy="12" r="10.4" fill="url(#coinR)"/><circle cx="12" cy="12" r="8.7" fill="url(#coinF)"/><circle cx="12" cy="12" r="8.7" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".7"/><circle cx="12" cy="12" r="6.7" fill="none" stroke="#868c93" stroke-opacity=".5" stroke-width=".8"/><ellipse cx="9" cy="8.4" rx="3.4" ry="2.2" fill="#fff" opacity=".33" transform="rotate(-25 9 8.4)"/><g fill="#6b7178"><ellipse cx="11.1" cy="14.2" rx="4" ry="2.6"/><circle cx="14.5" cy="11.4" r="2.15"/><path d="M16.3 10.8 L18.5 11.35 L16.3 12.5 Z"/><path d="M7.4 12.6 L5.2 11.7 L7.7 13.5 Z"/></g><circle cx="15.05" cy="10.85" r=".5" fill="#eceef0"/></svg>',
 };
 
@@ -627,9 +639,13 @@ function viewLedger(){
   if(!all.length && !anyLog) return `<div class="empty">No transactions yet. Record your first entry.</div>`;
   const q=(UI.ledgerQuery||"").trim().toLowerCase();
   const af=UI.ledgerAccount||"";
+  const amtOp=UI.amtOp||"", amtVal=parseFloat(UI.amtVal);
+  const amtOn=!!amtOp && !isNaN(amtVal);
+  const cmp=v=>{ switch(amtOp){case"gt":return v>amtVal;case"gte":return v>=amtVal;case"lt":return v<amtVal;case"lte":return v<=amtVal;case"eq":return round2(v)===round2(amtVal);default:return true;} };
   const acctOpts=`<option value="">All accounts</option>`+
     S.accounts.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}" ${af===a.id?"selected":""}>${esc(a.name)}</option>`).join("");
-  const active=!!(q||af);
+  const nFilters=(af?1:0)+(amtOn?1:0);
+  const active=!!(q||af||amtOn);
   let listHtml, count, total;
   if(mode==="activity"){
     // Activity = the append-only change log. Fixed order (newest first) — no sort options. Filters kept.
@@ -638,31 +654,39 @@ function viewLedger(){
     total=(S.auditLog||[]).length;
     if(q) ev=ev.filter(e=>{ const t=txById(e.txId); const hay=(e.desc||(t&&t.description)||"")+" "+(e.changes||[]).map(c=>c.field+" "+c.from+" "+c.to).join(" "); return hay.toLowerCase().includes(q); });
     if(af) ev=ev.filter(e=>{ const t=txById(e.txId); return t&&t.lines.some(l=>l.accountId===af); });
+    if(amtOn) ev=ev.filter(e=>{ const t=txById(e.txId); return t&&cmp(txAmount(t)); });
     count=ev.length;
-    listHtml = ev.length ? ev.map(renderEvent).join("") : `<div class="empty">No activity matches this filter.</div>`;
+    listHtml = ev.length ? ev.map(renderEvent).join("") : `<div class="empty">No activity matches these filters.</div>`;
   } else {
     // Entries = the ledger, including soft-deleted rows (shown muted with a Restore action).
     let txs=sortTxs([...all]);
     total=all.length;
     if(q) txs=txs.filter(t=>(t.description||"").toLowerCase().includes(q) || (t.comment||"").toLowerCase().includes(q));
     if(af) txs=txs.filter(t=>t.lines.some(l=>l.accountId===af));
+    if(amtOn) txs=txs.filter(t=>cmp(txAmount(t)));
     count=txs.length;
-    listHtml = txs.length ? txs.map(renderTxCard).join("") : `<div class="empty">No transactions match this filter.</div>`;
+    listHtml = txs.length ? txs.map(renderTxCard).join("") : `<div class="empty">No transactions match these filters.</div>`;
   }
   const modeSeg=`<div class="modeseg" role="group" aria-label="View">
       <button class="${mode==="entries"?"on":""}" data-action="ledger-mode" data-mode="entries">Entries</button>
       <button class="${mode==="activity"?"on":""}" data-action="ledger-mode" data-mode="activity">Activity</button>
     </div>`;
+  const AMT_OPS=[["","operator…"],["gt","greater than >"],["gte","at least ≥"],["lt","less than <"],["lte","at most ≤"],["eq","equals ="]];
+  const panel = UI.filtersOpen ? `<div class="filterpanel">
+      <label class="ffield"><span>Account</span><select id="ledger-acct">${acctOpts}</select></label>
+      <label class="ffield"><span>Amount (${base()})</span><span class="amtrow"><select id="amt-op">${AMT_OPS.map(([k,l])=>`<option value="${k}" ${amtOp===k?"selected":""}>${l}</option>`).join("")}</select><input id="amt-val" type="number" inputmode="decimal" step="any" placeholder="0" value="${escAttr(UI.amtVal||"")}"></span></label>
+      <div class="ffield" style="justify-content:flex-end"><button class="btn sm" data-action="ledger-clear">Clear all</button></div>
+    </div>` : "";
   const toolbar=`<div class="ledgertools">
     <div class="lfilters">${modeSeg}
       <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
-      <select id="ledger-acct" title="Filter by account">${acctOpts}</select>
-      ${active?`<button class="btn sm" data-action="ledger-clear">Clear</button><span class="lcount">${count} of ${total}</span>`:""}
+      <button class="btn sm filterbtn${(UI.filtersOpen||nFilters)?" on":""}" data-action="toggle-filters" title="Filters" aria-expanded="${!!UI.filtersOpen}">${I.filter}<span>Filters</span>${nFilters?`<span class="fbadge">${nFilters}</span>`:""}</button>
+      ${active?`<span class="lcount">${count} of ${total}</span>`:""}
     </div>
     ${mode==="entries"
       ? `<div class="lsort"><span>Sort</span><select id="ledger-sort">${LEDGER_SORTS.map(([k,l])=>`<option value="${k}" ${(UI.ledgerSort||"date-desc")===k?"selected":""}>${l}</option>`).join("")}</select></div>`
       : `<div class="lsort"><span class="muted" style="font-weight:400">Newest first</span></div>`}
-  </div>`;
+  </div>${panel}`;
   return toolbar+listHtml;
 }
 function renderTxCard(t){
@@ -1189,8 +1213,9 @@ document.addEventListener("click",e=>{
     case "ai-decline-line": { const L=UI.modal.draft.lines[+el.dataset.i]; if(L) delete L._propose; renderModal(); break; }
     case "open-account": goHash("#/account/"+encodeURIComponent(id)); break;
     case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
-    case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; render(); break;
+    case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; UI.amtOp=""; UI.amtVal=""; render(); break;
     case "ledger-mode": UI.ledgerMode=el.dataset.mode; render(); break;
+    case "toggle-filters": UI.filtersOpen=!UI.filtersOpen; render(); break;
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
     case "open-data": UI.modal={kind:"data"}; renderModal(); break;
@@ -1243,6 +1268,9 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("input",e=>{ const q=e.target.closest("#ledger-q"); if(!q) return;
   const pos=q.selectionStart; UI.ledgerQuery=q.value; render();
   const el=document.getElementById("ledger-q"); if(el){ el.focus(); try{ el.setSelectionRange(pos,pos); }catch(_){} } });
+document.addEventListener("input",e=>{ const a=e.target.closest("#amt-val"); if(!a) return;
+  UI.amtVal=a.value; render();
+  const el=document.getElementById("amt-val"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } });
 document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
@@ -1256,6 +1284,8 @@ document.addEventListener("change",e=>{
   if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const la=e.target.closest("#ledger-acct");
   if(la){ UI.ledgerAccount=la.value; render(); return; }
+  const ao=e.target.closest("#amt-op");
+  if(ao){ UI.amtOp=ao.value; render(); return; }
   const r=e.target.closest("[data-rate]");
   if(r){ const c=r.dataset.rate, v=parseFloat(r.value); if(!isNaN(v)&&v>0){ S.settings.rates[c]=v; save(); render(); } return; }
   const imp=e.target.closest("#import-file");
