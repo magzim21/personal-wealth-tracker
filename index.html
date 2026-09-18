@@ -176,6 +176,24 @@ table.register thead th{background:var(--surface-2)}
 .register .rbal{font-weight:600}
 .register .regrow{cursor:pointer}
 .register .regrow:hover td{background:var(--surface-2)}
+.txtime{font-family:var(--fs-mono);font-size:11px;color:var(--faint);margin-left:6px}
+.register .rchev{display:inline-block;width:14px;color:var(--faint);font-size:9px}
+.register .redit{width:36px;text-align:right}
+.register .rowedit{opacity:0;transition:opacity .12s}
+.register .regrow:hover .rowedit,.register .regrow.open .rowedit{opacity:1}
+.register .regrow.open>td{background:var(--surface-2)}
+.regdetail>td{padding:0;border-bottom:1px solid var(--line)}
+.rdetail{padding:10px 16px 12px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
+.rdetail-legs{display:flex;flex-direction:column;gap:4px}
+.dleg{display:flex;align-items:center;gap:10px;font-size:13px}
+.dleg-acct{flex:1}
+.dleg.self .dleg-acct{font-weight:600}
+.dleg-drcr{font-family:var(--fs-mono);font-size:10px;color:var(--faint);width:20px;text-align:right}
+.dleg-amt{font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+.rdetail-meta{font-size:12px;color:var(--muted)}
+.rdetail-actions{display:flex}
+.chkrow{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.chkrow input{width:auto;margin:0}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
 .modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column}
@@ -275,6 +293,8 @@ const todayLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `
 const nowLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
 // render a stored createdAt (ISO instant) in the viewer's local time
 const fmtCreated=iso=>{ try{ return new Date(iso).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(_){ return String(iso||""); } };
+// just the time-of-day of a recorded instant, shown in the org's zone (for the "show transaction time" option)
+const fmtTxTime=iso=>{ try{ return new Intl.DateTimeFormat(undefined,{timeZone:orgTz(),hour:"2-digit",minute:"2-digit"}).format(new Date(iso)); }catch(_){ return ""; } };
 // the organization's time zone drives the DEFAULT accounting date — a calendar date in the org's
 // zone, so posting from another zone still lands on the right business day.
 const orgTz=()=>(S&&S.settings&&S.settings.orgTimezone)||deviceTz();
@@ -442,7 +462,7 @@ function render(){
           <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
         </div>
         <button class="btn sm" data-action="open-rates" style="width:100%;margin-top:10px">Exchange rates</button>
-        <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Backup / restore</button>
+        <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Settings</button>
         ${STORE!==FILE_STORE?`<button class="btn sm" data-action="download-build" style="width:100%;margin-top:8px">⤓ Desktop app (.zip)</button>`:``}
       </div>
     </aside>
@@ -560,7 +580,7 @@ function viewLedger(){
     const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
     return `<div class="txcard">
       <div class="txhead">
-        <span class="date">${t.date}</span>
+        <span class="date">${t.date}${S.settings.showTxTime&&t.createdAt?` <span class="txtime">${esc(fmtTxTime(t.createdAt))}</span>`:""}</span>
         <span class="desc">${esc(t.description)}</span>
         <span class="txsum">${fmtBal(drBase)}<span class="cur">${base()}</span></span>
         <button class="iconbtn" data-action="edit-tx" data-id="${t.id}" title="Edit">${I.edit}</button>
@@ -599,16 +619,32 @@ function viewAccount(id){
     <div class="regbal"><span class="regbal-l">Current balance</span><b>${money(curBal,cur)}</b>${cur!==base()?`<span class="regbal-sub">${money(toBase(curBal,cur),base())} ${base()}</span>`:""}</div>
   </div>`;
   if(!posts.length) return head+`<div class="empty">No postings in this account yet.</div>`;
-  // display newest first; each row's Balance is the account balance right after that entry
-  const body=posts.slice().reverse().map(p=>`<tr class="regrow" data-action="edit-tx" data-id="${p.tx.id}" title="Edit entry">
-      <td class="rdate">${p.tx.date}</td>
-      <td class="rdesc">${esc(p.tx.description)}</td>
+  // display newest first; each row's Balance is the account balance right after that entry.
+  // Row click expands an inline detail (both legs, recorded time, comment); the hover pencil edits.
+  const expanded=UI.regExpanded||(UI.regExpanded=new Set());
+  const body=posts.slice().reverse().map(p=>{
+    const tx=p.tx, open=expanded.has(tx.id);
+    const time=S.settings.showTxTime&&tx.createdAt?` <span class="txtime">${esc(fmtTxTime(tx.createdAt))}</span>`:"";
+    const main=`<tr class="regrow${open?" open":""}" data-action="reg-expand" data-id="${tx.id}" title="Click for details">
+      <td class="rdate">${tx.date}${time}</td>
+      <td class="rdesc"><span class="rchev">${open?"▾":"▸"}</span>${esc(tx.description)}</td>
       <td class="num">${p.debit?money(p.debit,cur):""}</td>
       <td class="num">${p.credit?money(p.credit,cur):""}</td>
       <td class="num rbal">${money(p.run,cur)}</td>
-    </tr>`).join("");
+      <td class="redit"><button class="iconbtn rowedit" data-action="edit-tx" data-id="${tx.id}" title="Edit entry">${I.edit}</button></td>
+    </tr>`;
+    if(!open) return main;
+    const legs=tx.lines.map(l=>{const a=acctById(l.accountId);const c2=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);
+      return `<div class="dleg${a&&a.id===UI.accountId?" self":""}"><span class="dleg-acct">${a?esc(a.name):"—"}</span><span class="dleg-drcr">${isDr?"Dr":"Cr"}</span><span class="dleg-amt">${money(amt,c2)}${c2!==base()?` <span class="curtag">${c2}</span>`:""}</span></div>`;}).join("");
+    const detail=`<tr class="regdetail"><td colspan="6"><div class="rdetail">
+      <div class="rdetail-legs">${legs}</div>
+      <div class="rdetail-meta">Accounting date <b>${tx.date}</b>${tx.createdAt?` · Recorded <b>${esc(fmtCreated(tx.createdAt))}</b>`:""}${tx.comment?` · ${esc(tx.comment)}`:""}</div>
+      <div class="rdetail-actions"><button class="btn sm" data-action="edit-tx" data-id="${tx.id}">${I.edit}Edit</button></div>
+    </div></td></tr>`;
+    return main+detail;
+  }).join("");
   return head+`<table class="register">
-    <thead><tr><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+    <thead><tr><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th><th></th></tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
@@ -869,8 +905,12 @@ function renderModal(){
   } else if(UI.modal.kind==="data"){
     const eb='font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px';
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:480px" role="dialog" aria-modal="true">
-      <div class="modal-h"><h3>Backup &amp; restore</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-h"><h3>Settings</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
+        <div>
+          <div style="${eb}">Preferences</div>
+          <label class="chkrow"><input type="checkbox" id="showtime-toggle" ${S.settings.showTxTime?"checked":""}> Show transaction time <span class="muted" style="font-weight:400">— the recorded time next to each date</span></label>
+        </div>
         <div>
           <div style="${eb}">Export</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1020,6 +1060,7 @@ document.addEventListener("click",e=>{
     case "del-acct": delAccount(id); break;
     case "new-tx": txModal(null); break;
     case "open-account": goHash("#/account/"+encodeURIComponent(id)); break;
+    case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; render(); break;
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
@@ -1062,6 +1103,8 @@ document.addEventListener("change",e=>{
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
   const tz=e.target.closest("#tz-pick");
   if(tz){ S.settings.orgTimezone=tz.value; save(); render(); return; }
+  const stt=e.target.closest("#showtime-toggle");
+  if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
   const ls=e.target.closest("#ledger-sort");
   if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const la=e.target.closest("#ledger-acct");
