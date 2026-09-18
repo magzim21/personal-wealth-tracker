@@ -51,7 +51,9 @@ input,select{font-family:inherit;color:var(--ink)}
 
 .app{display:grid;grid-template-columns:224px 1fr;min-height:100dvh}
 .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:16px;padding:18px 12px;position:sticky;top:0;height:100dvh}
-.brand{display:flex;align-items:center;gap:10px;padding:0 8px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px;margin:-4px 0;border-radius:var(--r-sm);cursor:pointer;transition:background .14s}
+.brand:hover{background:var(--surface-2)}
+.brand:active{transform:scale(.99)}
 .brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--fs-display);font-weight:600;font-size:17px;flex:none}
 .brand h1{font-size:20px}
 .nav{display:flex;flex-direction:column;gap:3px}
@@ -97,18 +99,26 @@ input,select{font-family:inherit;color:var(--ink)}
 .railcard .rsub{font-size:11px;color:var(--faint);margin-top:3px;line-height:1.4}
 .railcard .rnote{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.45}
 .fxlist{margin-top:10px}
-.fxrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.fxrow{padding:9px 0;border-top:1px solid var(--line)}
 .fxrow:first-child{border-top:0;padding-top:2px}
-.fxrow .fxc{font-family:var(--fs-mono);font-size:12px;color:var(--muted);width:58px;flex:none}
-.fxrow .fxc small{color:var(--faint);font-size:10px}
-.fxrow .spark{flex:1;height:24px;display:block;overflow:visible}
-.fxrow .spark path{fill:none;stroke:var(--faint);stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;opacity:.85}
-.fxrow .spark .area{fill:var(--faint);opacity:.06;stroke:none}
-.fxrow .fxd{font-family:var(--fs-mono);font-size:11px;text-align:right;width:50px;flex:none;color:var(--faint)}
-.fxrow .fxd.up{color:color-mix(in srgb,var(--pos) 55%,var(--muted))}
-.fxrow .fxd.dn{color:color-mix(in srgb,var(--neg) 55%,var(--muted))}
+.fxhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.fxhead .fxc{font-family:var(--fs-mono);font-size:12px;color:var(--muted)}
+.fxhead .fxd{font-family:var(--fs-mono);font-size:11px;color:var(--faint)}
+.fxhead .fxd.up{color:color-mix(in srgb,var(--pos) 55%,var(--muted))}
+.fxhead .fxd.dn{color:color-mix(in srgb,var(--neg) 55%,var(--muted))}
+.fxchart{position:relative;height:34px;margin-top:4px}
+.fxchart .spark{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+.fxchart .spark path{fill:none;stroke:var(--faint);stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;opacity:.85}
+.fxchart .spark .area{fill:var(--faint);opacity:.06;stroke:none}
+/* the y-range as faint labels: 6-month high pinned to the top, low to the bottom */
+.fxbound{position:absolute;left:0;font-family:var(--fs-mono);font-size:9.5px;line-height:1;color:var(--faint);opacity:.85;background:var(--surface);padding:1px 3px;border-radius:3px;pointer-events:none}
+.fxbound.hi{top:-3px}
+.fxbound.lo{bottom:-3px}
+.fxnow{font-family:var(--fs-mono);font-size:10.5px;color:var(--faint);margin-top:5px}
+.fxnow b{color:var(--muted);font-weight:600}
 .debtclock{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:21px;color:var(--muted);letter-spacing:-.02em;margin-top:9px;line-height:1.1;word-break:break-word}
 .debtclock .dec{font-size:13px;color:var(--faint)}
+.debtclock .dec2{font-size:11px;opacity:.6}
 .debt-pc{font-family:var(--fs-mono);font-size:12.5px;color:var(--faint);margin-top:6px}
 .debt-pc b{color:var(--muted);font-weight:600}
 .barrow{display:flex;align-items:center;gap:12px;margin:9px 0;font-size:13px}
@@ -539,8 +549,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===false) UI.fxRail=false; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail!==false,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||""})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===true) UI.fxRail=true; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail===true,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||""})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -659,7 +669,7 @@ function render(){
   document.getElementById("app").innerHTML=`
   <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}">
     <aside class="side">
-      <div class="brand"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
+      <div class="brand" data-action="go-home" role="button" tabindex="0" title="Home"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav${["dashboard","about"].includes(UI.view)?" more-open":""}">
         ${(()=>{ const item=([v,l])=>{ const isHome=(UI.homeView||"accounts")===v;
             return `<div class="navitem">
@@ -1539,6 +1549,7 @@ document.addEventListener("click",e=>{
   switch(a){
     case "toggle-privacy": UI.privacy=!UI.privacy; saveUIPrefs(); render(); break;
     case "tab": goHash("#/"+el.dataset.view); break;
+    case "go-home": goHash("#/"+(UI.homeView||"accounts")); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
     case "set-palette": S.settings.palette=el.dataset.pal; applyPalette(); save(); render(); renderModal(); break;
@@ -1598,6 +1609,7 @@ document.addEventListener("click",e=>{
   }
 });
 document.addEventListener("keydown",e=>{
+  if((e.key==="Enter"||e.key===" ")&&e.target&&e.target.closest&&e.target.closest('[data-action="go-home"]')){ e.preventDefault(); goHash("#/"+(UI.homeView||"accounts")); return; }   // logo → homepage
   if(UI.sub){ if(e.key==="Escape"){ UI.sub=null; renderModal(); } else if(e.key==="Enter"){ e.preventDefault(); subCreate(); } return; }   // sub-modal takes keys first
   if(!UI.modal) return;
   if(e.key==="Escape"){ dismissModal(); return; }
@@ -1804,8 +1816,8 @@ const CCY_COUNTRY={USD:"US",EUR:"DE",GBP:"GB",JPY:"JP",CAD:"CA",AUD:"AU",CHF:"CH
 const DEBT_COUNTRIES=[["US","United States"],["CA","Canada"],["GB","United Kingdom"],["UA","Ukraine"],["FI","Finland"],["DE","Germany"],["FR","France"],["IT","Italy"],["ES","Spain"],["PL","Poland"],["JP","Japan"],["CN","China"],["IN","India"],["AU","Australia"],["NZ","New Zealand"],["CH","Switzerland"],["SE","Sweden"],["NO","Norway"],["BR","Brazil"],["MX","Mexico"],["ZA","South Africa"],["TR","Türkiye"],["SG","Singapore"],["AE","United Arab Emirates"]];
 const countryName=iso=>{ const f=DEBT_COUNTRIES.find(c=>c[0]===iso); return f?f[1]:iso; };
 const debtCountry=()=> UI.debtCountry || CCY_COUNTRY[base()] || "US";
-const fxRailOn=()=> UI.fxRail!==false;      // default ON — the headline "fill the space" feature
-const debtClockOn=()=> UI.debtClock===true; // default OFF — an easter egg you opt into
+const fxRailOn=()=> UI.fxRail===true;        // default OFF — opt in from Settings
+const debtClockOn=()=> UI.debtClock===true;  // default OFF — an easter egg you opt into
 const railOn=()=> fxRailOn() || debtClockOn();
 // compact currency/number helpers for the rail (the ledger's money() rounds to whole units by default)
 function money1(v,cur){ try{ return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:2,maximumFractionDigits:4}).format(v);}catch(_){ return (+v).toFixed(2)+" "+cur; } }
@@ -1853,12 +1865,17 @@ function paintFx(){
   if(RAIL.fxErr==="no-foreign"){ n.innerHTML='<div class="rnote">Add an account in another currency to see how it moves against '+esc(base())+'.</div>'; return; }
   if(RAIL.fxErr){ n.innerHTML='<div class="rnote">'+esc(RAIL.fxErr)+'</div>'; return; }
   if(!RAIL.fx.length){ n.innerHTML='<div class="rnote">No chartable currencies right now.</div>'; return; }
-  const W=110,H=24;
+  const W=110,H=34;
   n.innerHTML='<div class="fxlist">'+RAIL.fx.map(s=>{
     const sp=sparkPath(s.pts,W,H), up=s.pct>=0, flat=Math.abs(s.pct)<0.05;
-    return '<div class="fxrow"><span class="fxc">1 '+esc(s.cur)+'<br><small>'+money1(s.last,base())+'</small></span>'
+    const hi=Math.max(...s.pts), lo=Math.min(...s.pts);
+    return '<div class="fxrow">'
+      +'<div class="fxhead"><span class="fxc">1 '+esc(s.cur)+'</span><span class="fxd '+(flat?"":(up?"up":"dn"))+'">'+(up?"+":"−")+Math.abs(s.pct).toFixed(1)+'%</span></div>'
+      +'<div class="fxchart"><span class="fxbound hi">'+money1(hi,base())+'</span>'
       +'<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><path class="area" d="'+sp.area+'"/><path d="'+sp.line+'"/></svg>'
-      +'<span class="fxd '+(flat?"":(up?"up":"dn"))+'">'+(up?"+":"−")+Math.abs(s.pct).toFixed(1)+'%</span></div>';
+      +'<span class="fxbound lo">'+money1(lo,base())+'</span></div>'
+      +'<div class="fxnow">now <b>'+money1(s.last,base())+'</b></div>'
+      +'</div>';
   }).join("")+'</div>';
 }
 
@@ -1893,13 +1910,17 @@ function paintDebt(){
   stopDebtTick(); tickDebt();
   if(!window.matchMedia("(prefers-reduced-motion:reduce)").matches && d.perYearUsd>0) debtTimer=setInterval(tickDebt,1000);
 }
+function compactMoney(v,cur){ try{ return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,notation:"compact",maximumFractionDigits:1}).format(v);}catch(_){ return nfmt(v)+" "+cur; } }
 function tickDebt(){
   const d=RAIL.debt; if(!d) return;
-  const tot=document.getElementById("debt-total"), pc=document.getElementById("debt-pc");
-  if(!tot||!pc){ stopDebtTick(); return; }
-  const usd=debtNowUsd(), inBase=convert(usd,"USD",base()), whole=Math.floor(inBase), dec=Math.round((inBase-whole)*100);
-  tot.innerHTML=money0(whole,base())+'<span class="dec">.'+String(Math.min(dec,99)).padStart(2,"0")+'</span>';
-  pc.innerHTML='≈ <b>'+money1(convert(usd/d.pop,"USD",base()),base())+'</b> per citizen · '+nfmt(d.pop)+' people';
+  // Headline is the PER-CITIZEN figure (the "food for thought" hook). The national total is kept as
+  // a compact aside, not a giant number. Four decimals so the tail visibly ticks second to second.
+  const head=document.getElementById("debt-total"), sub=document.getElementById("debt-pc");
+  if(!head||!sub){ stopDebtTick(); return; }
+  const usd=debtNowUsd(), perBase=convert(usd/d.pop,"USD",base()), whole=Math.floor(perBase);
+  const f4=String(Math.floor((perBase-whole)*1e4)).padStart(4,"0");
+  head.innerHTML=money0(whole,base())+'<span class="dec">.'+f4.slice(0,2)+'<span class="dec2">'+f4.slice(2)+'</span></span>';
+  sub.innerHTML='per citizen · '+compactMoney(convert(usd,"USD",base()),base())+' total · '+nfmt(d.pop)+' people';
 }
 function stopDebtTick(){ if(debtTimer){ clearInterval(debtTimer); debtTimer=null; } }
 
