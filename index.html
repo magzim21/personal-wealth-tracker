@@ -55,6 +55,32 @@ input,select{font-family:inherit;color:var(--ink)}
 .nav{display:flex;flex-direction:column;gap:3px}
 .nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--muted);font-size:14px;font-weight:500;padding:9px 12px;border-radius:var(--r-sm)}
 .nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav .navitem{position:relative;display:flex}
+.nav .navitem .navlink{flex:1}
+.homebtn{position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;background:none!important;border:0;color:var(--faint);cursor:pointer;padding:3px;width:auto!important;display:inline-flex;transition:opacity .14s,color .14s}
+.homebtn svg{width:15px;height:15px}
+.nav .navitem:hover .homebtn{opacity:.7}
+.homebtn:hover{color:var(--ink)}
+.homebtn.set{opacity:1;color:var(--accent)}
+/* dashboard */
+.dash{display:flex;flex-direction:column;gap:14px}
+.dash-hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:22px 24px}
+.dash-hero .dl,.dtile .dl,.dch{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+.netnum{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:clamp(30px,6vw,44px);font-weight:700;line-height:1.1;margin:2px 0}
+.dsub{font-size:12.5px;color:var(--muted)}
+.dash-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:560px){.dash-tiles{grid-template-columns:1fr}}
+.dtile{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:13px 16px;display:flex;flex-direction:column;gap:4px}
+.dtile b{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:19px}
+.dtile.cls-asset{border-left-color:var(--accent)} .dtile.cls-liability{border-left-color:var(--neg)} .dtile.cls-equity{border-left-color:#2f6db3}
+.dash-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px}
+.dch{margin-bottom:12px}
+.barrow{display:flex;align-items:center;gap:12px;margin:9px 0;font-size:13px}
+.barrow .bl{flex:0 0 32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.barrow .btrack{flex:1;height:9px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.barrow .bfill{display:block;height:100%;border-radius:5px;background:var(--muted)}
+.barrow .bfill.cls-asset{background:var(--accent)} .barrow .bfill.cls-liability{background:var(--neg)} .barrow .bfill.cls-equity{background:#2f6db3}
+.barrow .bv{flex:0 0 auto;font-family:var(--fs-mono);font-variant-numeric:tabular-nums;color:var(--muted);min-width:66px;text-align:right}
 .nav button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 2px}
 .curpick{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
@@ -420,8 +446,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -511,6 +537,7 @@ const I={
   chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>',
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
   coin:'<svg viewBox="0 0 24 24" style="width:23px;height:23px"><defs><radialGradient id="coinF" cx="37%" cy="32%" r="82%"><stop offset="0%" stop-color="#fbfcfc"/><stop offset="52%" stop-color="#d9dde1"/><stop offset="100%" stop-color="#a7adb4"/></radialGradient><linearGradient id="coinR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c7ccd1"/><stop offset="100%" stop-color="#7e848b"/></linearGradient></defs><circle cx="12" cy="12" r="10.4" fill="url(#coinR)"/><circle cx="12" cy="12" r="8.7" fill="url(#coinF)"/><circle cx="12" cy="12" r="8.7" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".7"/><circle cx="12" cy="12" r="6.7" fill="none" stroke="#868c93" stroke-opacity=".5" stroke-width=".8"/><ellipse cx="9" cy="8.4" rx="3.4" ry="2.2" fill="#fff" opacity=".33" transform="rotate(-25 9 8.4)"/><g fill="#6b7178"><ellipse cx="11.1" cy="14.2" rx="4" ry="2.6"/><circle cx="14.5" cy="11.4" r="2.15"/><path d="M16.3 10.8 L18.5 11.35 L16.3 12.5 Z"/><path d="M7.4 12.6 L5.2 11.7 L7.7 13.5 Z"/></g><circle cx="15.05" cy="10.85" r=".5" fill="#eceef0"/></svg>',
 };
 
@@ -520,8 +547,12 @@ function render(){
     <aside class="side">
       <div class="brand"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav">
-        <button data-action="tab" data-view="accounts" class="${UI.view==="accounts"?"on":""}">Accounts</button>
-        <button data-action="tab" data-view="ledger" class="${UI.view==="ledger"?"on":""}">Ledger</button>
+        ${[["accounts","Accounts"],["ledger","Ledger"],["dashboard","Dashboard"]].map(([v,l])=>{
+          const isHome=(UI.homeView||"accounts")===v;
+          return `<div class="navitem">
+            <button class="navlink${UI.view===v?" on":""}" data-action="tab" data-view="${v}">${l}</button>
+            <button class="homebtn${isHome?" set":""}" data-action="set-home" data-view="${v}" data-tip="${isHome?"Your homepage (opens by default)":"Make this your homepage"}" aria-label="Set as homepage">${I.home}</button>
+          </div>`;}).join("")}
       </nav>
       <div class="side-foot">
         <label class="curpick"><span>Currency</span>
@@ -547,7 +578,7 @@ function render(){
     </aside>
     <div class="main">
       <div class="mainhead">
-        <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="accounts"?"Accounts":"Ledger"}</h2>
+        <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="dashboard"?"Dashboard":UI.view==="accounts"?"Accounts":"Ledger"}</h2>
         <div class="grow"></div>
         <span class="ver">${VERSION} · ${verInfo().label} · ${UPDATED}${verInfo().committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${verInfo().migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}</span>
         ${UI.view==="accounts"
@@ -555,7 +586,7 @@ function render(){
           : `<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
       </div>
       ${warnBanner()}
-      <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="accounts"?viewAccounts():viewLedger()}</div>
+      <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
   </div>`;
   animateCounts();
@@ -633,6 +664,25 @@ function sortTxs(arr){
     }
   });
   return arr;
+}
+function viewDashboard(){
+  const A=classTotalBase("asset"), L=classTotalBase("liability"), E=classTotalBase("equity");
+  const net=round2(A-L);
+  const rows=S.types.map(t=>({name:t.name,cls:t.class,v:typeBalanceBase(t.id)})).filter(r=>Math.abs(r.v)>0.005).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+  const max=rows.reduce((m,r)=>Math.max(m,Math.abs(r.v)),0)||1;
+  const tiles=[["asset","Assets",A],["liability","Liabilities",L],["equity","Equity",E]];
+  const nEntries=S.transactions.filter(t=>!t.deleted).length;
+  return `<div class="dash">
+    <div class="dash-hero">
+      <span class="dl">Net worth · ${base()}</span>
+      <div class="netnum">${money(net)}</div>
+      <span class="dsub">Assets − Liabilities · ${nEntries} ${nEntries===1?"entry":"entries"} · ${S.accounts.length} accounts</span>
+    </div>
+    <div class="dash-tiles">${tiles.map(([c,l,v])=>`<div class="dtile cls-${c}"><span class="dl">${l}</span><b>${money(v)}</b></div>`).join("")}</div>
+    ${rows.length?`<div class="dash-card"><div class="dch">Balances by type</div>${rows.map(r=>{const pct=Math.max(2,Math.round(Math.abs(r.v)/max*100));
+       return `<div class="barrow"><span class="bl">${esc(r.name)}</span><span class="btrack"><span class="bfill cls-${r.cls}" style="width:${pct}%"></span></span><span class="bv">${money(r.v)}</span></div>`;}).join("")}</div>`
+     :`<div class="empty">No balances yet — add accounts and transactions to see your dashboard.</div>`}
+  </div>`;
 }
 function viewLedger(){
   const mode=UI.ledgerMode||"entries";
@@ -1182,8 +1232,10 @@ function updateBal(){
 function applyHash(){
   const parts=(location.hash||"").replace(/^#\/?/,"").split("/");
   if(parts[0]==="ledger"){ UI.view="ledger"; }
+  else if(parts[0]==="dashboard"){ UI.view="dashboard"; }
   else if(parts[0]==="account"&&parts[1]){ const id=decodeURIComponent(parts[1]); if(acctById(id)){ UI.view="account"; UI.accountId=id; } else { UI.view="accounts"; } }
-  else { UI.view="accounts"; }
+  else if(parts[0]==="accounts"){ UI.view="accounts"; }
+  else { UI.view=UI.homeView||"accounts"; }   // a bare URL opens your chosen homepage
 }
 function goHash(h){ if(location.hash===h){ render(); } else { location.hash=h; } } // set URL → hashchange re-renders; force a render if it's already there
 window.addEventListener("hashchange",()=>{ applyHash(); render(); });
@@ -1191,7 +1243,8 @@ document.addEventListener("click",e=>{
   const el=e.target.closest("[data-action]"); if(!el) return;
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
-    case "tab": goHash(el.dataset.view==="ledger"?"#/ledger":"#/accounts"); break;
+    case "tab": goHash("#/"+el.dataset.view); break;
+    case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
