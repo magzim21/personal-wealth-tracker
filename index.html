@@ -407,10 +407,12 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .aiprop-txt .cls{font-weight:700}
 .aiprop-txt .grp{font-weight:500}
 .aiprop-txt .sep{color:var(--faint)}
-.acctcell{display:flex;gap:3px;align-items:center;min-width:0}
+.acctcell{display:flex;gap:5px;align-items:center;min-width:0}
 .acctcell select{flex:1;min-width:0}
 .iconbtn.addnew{flex:none;color:var(--accent);padding:3px;width:26px;height:26px}
 .iconbtn.addnew svg{width:15px;height:15px}
+/* remove-line ×: centered in its track and sitting close to the credit field (no stray left padding) */
+.line .rmline{justify-self:center;padding:6px 0;width:100%}
 .propclass,.propgroup{padding:2px 6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink)}
 .propgroupname{padding:2px 7px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink);min-width:110px;max-width:170px}
 .propname{padding:2px 7px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink);min-width:130px;max-width:220px}
@@ -1596,10 +1598,10 @@ function lineRow(l,i){
   }
   const used=new Set(((UI.modal&&UI.modal.draft&&UI.modal.draft.lines)||[]).map((x,j)=>j!==i?x.accountId:"").filter(Boolean));
   return `<div class="line" data-i="${i}">
-    <div class="acctcell"><select data-line="acct" data-i="${i}">${acctOptions(l.accountId,used)}</select><button class="iconbtn addnew" data-action="leg-new-acct" data-i="${i}" data-tip="Create a new account for this leg" aria-label="New account">${I.plus}</button></div>
+    <div class="acctcell"><button class="iconbtn addnew" data-action="leg-new-acct" data-i="${i}" data-tip="Create a new account for this leg" aria-label="New account">${I.plus}</button><select data-line="acct" data-i="${i}">${acctOptions(l.accountId,used)}</select></div>
     <input type="number" step="0.01" data-line="debit" data-i="${i}" value="${l.debit||""}" placeholder="0.00">
     <input type="number" step="0.01" data-line="credit" data-i="${i}" value="${l.credit||""}" placeholder="0.00">
-    <button class="iconbtn" data-action="rm-line" data-i="${i}">${I.x}</button>
+    <button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>
   </div>`;
 }
 function syncLines(){
@@ -1624,8 +1626,10 @@ function updateBal(){
   const tol=Math.max(0.01,0.005*Math.max(dr,cr)); // absorb cross-currency rate rounding
   const ok=Math.abs(diff)<=tol && dr>0;
   const row=document.getElementById("balrow");
+  const pristine=!dr && !cr;   // nothing entered yet — don't show a balance verdict on an untouched form
+  row.style.display=pristine?"none":"";
   row.className="balrow "+(ok?"ok":(dr||cr?"bad":""));
-  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span>${ok?"✓ Balanced":(dr||cr?"Off by "+fmtBal(Math.abs(diff)):"Enter amounts")}</span>`;
+  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span>${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span>`;
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
 
