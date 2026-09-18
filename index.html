@@ -158,6 +158,8 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .ledgertools .lsearch{width:200px;max-width:46vw;font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
 .ledgertools .lcount{font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
 /* account register (running-balance statement) */
+.infodot{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;font-size:11px;color:var(--faint);border:1px solid var(--line-strong);border-radius:50%;cursor:help;vertical-align:middle;font-style:normal;line-height:1}
+.infodot:hover{color:var(--ink);border-color:var(--muted)}
 .acctlink{cursor:pointer;border-bottom:1px dashed transparent}
 .acctlink:hover{border-bottom-color:var(--line-strong);color:var(--accent,inherit)}
 .reghead{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
@@ -263,6 +265,9 @@ function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
   const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   return `${PROJECT}_${ts}_${COMMIT}.${ext}`; }   // sortable: project _ YYYYMMDD-HHMMSS _ commit
 const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
+// IANA time-zone list for the organization-timezone picker (falls back to a short list on old engines)
+const TZLIST=(()=>{ try{ return Intl.supportedValuesOf("timeZone"); }catch(_){ return ["UTC","America/Vancouver","America/Toronto","America/New_York","America/Chicago","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Moscow","Asia/Almaty","Asia/Dubai","Asia/Tokyo","Australia/Sydney"]; } })();
+const deviceTz=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"; }catch(_){ return "UTC"; } };
 
 // Local calendar date/time (NOT UTC): a transaction posted Friday evening must be dated Friday,
 // even after UTC has rolled over to Saturday. toISOString() is UTC and caused future-dated entries.
@@ -270,6 +275,10 @@ const todayLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `
 const nowLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
 // render a stored createdAt (ISO instant) in the viewer's local time
 const fmtCreated=iso=>{ try{ return new Date(iso).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(_){ return String(iso||""); } };
+// the organization's time zone drives the DEFAULT accounting date — a calendar date in the org's
+// zone, so posting from another zone still lands on the right business day.
+const orgTz=()=>(S&&S.settings&&S.settings.orgTimezone)||deviceTz();
+const todayAccounting=()=>{ try{ return new Intl.DateTimeFormat("en-CA",{timeZone:orgTz()}).format(new Date()); }catch(_){ return todayLocal(); } };
 function seed(){
   // Start empty — no sample accounts, types, or transactions. A fresh book.
   return {types:[],accounts:[],transactions:[],settings:{currency:"USD",rates:{USD:1},ratesUpdated:""}};
@@ -347,6 +356,7 @@ function normalizeState(){
   S.accounts.forEach(a=>{ if(a.currency&&S.settings.rates[a.currency]==null) S.settings.rates[a.currency]=1; });
   if(S.settings.rates[S.settings.currency]==null) S.settings.rates[S.settings.currency]=1;
   if(!["auto","light","dark"].includes(S.settings.theme)) S.settings.theme="auto";
+  if(!S.settings.orgTimezone) S.settings.orgTimezone=deviceTz();   // organization time zone (drives the accounting-date default)
   // v2 backfill: give any pre-existing transaction a createdAt. We don't know the real booking
   // instant, so proxy it from the transaction date (noon local, to stay on the same calendar day).
   S.transactions.forEach(t=>{ if(!t.createdAt) t.createdAt=new Date((t.date||"1970-01-01")+"T12:00:00").toISOString(); });
@@ -424,6 +434,9 @@ function render(){
       <div class="side-foot">
         <label class="curpick"><span>Currency</span>
           <select id="cur-pick">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
+        </label>
+        <label class="curpick" style="margin-top:10px"><span>Organization time zone <span class="infodot" title="Your organization's home time zone. Accounting standards date each transaction to the calendar day in THIS zone (its «accounting date»), so an entry made late at night — or posted from a device in another time zone — still lands on the right business day. The org's location isn't recorded anywhere else, so this is where the books are based.&#10;&#10;Every transaction keeps two times: when it was RECORDED (a booking instant, stored in UTC) and when it HAPPENED (its accounting date, a calendar day in this zone).">&#9432;</span></span>
+          <select id="tz-pick">${TZLIST.map(z=>`<option value="${escAttr(z)}" ${orgTz()===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
         </label>
         <div class="curpick" style="margin-top:10px"><span>Theme</span>
           <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
@@ -779,7 +792,7 @@ function acctModal(existing,presetTypeId){
 }
 /* ---- transaction modal ---- */
 function txModal(existing){
-  const t=existing||{date:todayLocal(),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
+  const t=existing||{date:todayAccounting(),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
   UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
   renderModal();
 }
@@ -919,7 +932,7 @@ go run server.go          # Go</pre>
       <div class="modal-h"><h3>${UI.modal.id?"Edit transaction":"New transaction"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <div class="grid2">
-          <label class="field"><span>Date</span><input type="date" id="tx-date" value="${d.date}"></label>
+          <label class="field"><span>Accounting date <span class="infodot" title="The calendar day this transaction is booked to (its accounting date), in the organization's time zone — the day it HAPPENED, not when it was entered. Standards date entries to this business day. When the transaction was recorded is kept separately as an immutable UTC timestamp.">&#9432;</span></span><input type="date" id="tx-date" value="${d.date}"></label>
           <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="e.g. Cash sale"></label>
         </div>
         <div>
@@ -1036,6 +1049,8 @@ document.addEventListener("input",e=>{ const q=e.target.closest("#ledger-q"); if
 document.addEventListener("change",e=>{
   const el=e.target.closest("#cur-pick");
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
+  const tz=e.target.closest("#tz-pick");
+  if(tz){ S.settings.orgTimezone=tz.value; save(); render(); return; }
   const ls=e.target.closest("#ledger-sort");
   if(ls){ UI.ledgerSort=ls.value; render(); return; }
   const la=e.target.closest("#ledger-acct");
