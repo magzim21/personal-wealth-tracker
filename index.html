@@ -421,6 +421,7 @@ function toBase(amount,cur){ return convert(amount,cur,base()); }
 function money(n,cur){
   cur=cur||base();
   const d=(S.settings&&S.settings.showCents)?2:0;   // cents hidden by default; Settings toggle turns them on
+  if(Math.round((n||0)*Math.pow(10,d))===0) n=0;    // avoid "-$0": a value that rounds to zero shows as +0
   try{return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:d,maximumFractionDigits:d}).format(n);}
   catch(e){return n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})+" "+cur;}
 }
