@@ -113,8 +113,8 @@ input,select{font-family:inherit;color:var(--ink)}
 /* the y-range as faint labels: 6-month high pinned to the top, low to the bottom */
 .fxbound{position:absolute;left:0;font-family:var(--fs-mono);font-size:9.5px;line-height:1;color:var(--faint);opacity:.85;background:var(--surface);padding:1px 3px;border-radius:3px;pointer-events:none}
 .fxbound.hi{top:-3px}
-.fxbound.lo{bottom:-3px}
-.fxnow{font-family:var(--fs-mono);font-size:10.5px;color:var(--faint);margin-top:5px}
+.fxbound.lo{bottom:0;transform:translateY(50%)}   /* centered on the chart's bottom line */
+.fxnow{font-family:var(--fs-mono);font-size:10.5px;color:var(--faint);margin-top:9px}
 .fxnow b{color:var(--muted);font-weight:600}
 .debtclock{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:21px;color:var(--muted);letter-spacing:-.02em;margin-top:9px;line-height:1.1;word-break:break-word}
 .debtclock .dec{font-size:13px;color:var(--faint)}
@@ -189,6 +189,9 @@ input,select{font-family:inherit;color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.primary:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
 .btn.sm{padding:5px 9px;font-size:12.5px}
+.btn.xs{padding:4px 8px;font-size:11.5px;white-space:nowrap}
+.datewrap{display:flex;gap:6px;align-items:stretch}
+.datewrap input[type=date]{flex:1 1 auto;min-width:0}
 .btn:disabled{opacity:.5;cursor:default}
 .btn svg{width:16px;height:16px}
 .iconbtn{background:none;border:0;color:var(--faint);padding:6px;border-radius:6px;display:grid;place-items:center}
@@ -1232,10 +1235,15 @@ function acctModal(existing,presetTypeId){
   renderModal();
 }
 /* ---- transaction modal ---- */
+let LAST_LEGS=null;   // account ids of the last saved entry's two legs — pre-seeded into the next new entry so recurring postings (rent, salary) need no re-picking
 function txModal(existing){
-  const t=existing||{date:todayAccounting(),description:"",lines:[{accountId:"",debit:0,credit:0},{accountId:"",debit:0,credit:0}]};
+  // for a brand-new entry, seed the two legs with the accounts used last time (skip any that were since deleted)
+  const seed=()=>{ const ex=(LAST_LEGS||[]).filter(id=>S.accounts.some(a=>a.id===id&&!a.deleted)); return [{accountId:ex[0]||"",debit:0,credit:0},{accountId:ex[1]||"",debit:0,credit:0}]; };
+  const t=existing||{date:todayAccounting(),description:"",lines:seed()};
   UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
   renderModal();
+  // smart form: land the cursor in Description so typing can start immediately (new entries only)
+  if(!UI.modal.id) setTimeout(()=>{ const de=document.getElementById("tx-desc"); if(de) de.focus(); },0);
 }
 function acctOptions(sel,exclude){
   // only detail accounts are selectable — a class or type can never be posted to.
@@ -1412,7 +1420,7 @@ go run server.go          # Go</pre>
           ? `<input type="text" id="ai-desc" placeholder="Describe it — e.g. paid rent from checking" value="${escAttr(UI.modal.aiText||"")}"><button class="btn sm primary" data-action="ai-draft" id="ai-draft" data-tip="Sends your words + account names, every number stripped first. Picks the legs only — you enter the amount.">✨ Draft legs</button>`
           : `<button class="btn sm" data-action="or-connect" style="width:100%" data-tip="Browser-only sign-in that makes your own OpenRouter key, kept in this browser. Nothing sends until «Draft legs», numbers always stripped.">✨ Connect OpenRouter to draft entries with AI</button>`}</div>
         <div class="grid2">
-          <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><input type="date" id="tx-date" value="${d.date}"></label>
+          <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><div class="datewrap"><input type="date" id="tx-date" value="${d.date}"><button type="button" class="btn xs" data-action="tx-today" title="Set to today">Today</button></div></label>
           <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="e.g. Cash sale"></label>
         </div>
         <div>
@@ -1604,6 +1612,7 @@ document.addEventListener("click",e=>{
     case "save-acct": saveAcct(); break;
     case "add-line": syncLines(); UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); const de=document.getElementById("tx-date"); if(de) de.value=UI.modal.draft.date; break; }
     case "save-tx": saveTx(); break;
     case "del-tx-modal": { const did=UI.modal.id; askConfirm("Delete this transaction? It stays in the ledger (marked deleted) and can be restored.", ()=>{ const t=S.transactions.find(x=>x.id===did); if(t){ t.deleted=true; t.deletedAt=new Date().toISOString(); logAudit("delete",did,{desc:t.description}); } save(); render(); }); break; }
   }
@@ -1797,6 +1806,7 @@ function saveTx(){
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
   if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id); if(prev&&prev.deleted){tx.deleted=prev.deleted;tx.deletedAt=prev.deletedAt;} S.transactions[idx]=tx; const ch=txDiff(prev||{},tx); if(ch.length) logAudit("edit",tx.id,{desc:tx.description,changes:ch});}
   else { S.transactions.push(tx); logAudit("create",tx.id,{desc:tx.description}); }
+  LAST_LEGS=tx.lines.slice(0,2).map(l=>l.accountId);   // remember these legs for the next new entry
   save();render();dismissModal();
 }
 
@@ -1927,7 +1937,7 @@ function stopDebtTick(){ if(debtTimer){ clearInterval(debtTimer); debtTimer=null
 function viewRail(){
   let cards="";
   if(fxRailOn()) cards+='<div class="railcard"><div class="rt">Currency trends <span class="infodot" data-tip="Each account currency against your base ('+esc(base())+') over ~6 months — European Central Bank data via frankfurter.dev.&#10;Sent: currency codes only. Never sent: balances, amounts or account names.">&#9432;</span></div><div class="rsub">vs '+esc(base())+' · past 6 months</div><div id="rail-fx"></div></div>';
-  if(debtClockOn()) cards+='<div class="railcard"><div class="rt">Debt clock <span class="infodot" data-tip="A playful, estimated per-citizen public-debt figure, projected from World Bank open data.&#10;Sent: a 2-letter country code only. Never sent: anything about your ledger.&#10;Off by default — a bit of food for thought.">&#9432;</span></div><div class="rsub">'+esc((RAIL.debt&&RAIL.debt.name)||countryName(debtCountry()))+'</div><div id="rail-debt"></div></div>';
+  if(debtClockOn()) cards+='<div class="railcard"><div class="rt">Debt clock <span class="infodot" data-tip="Not a fact to trust — a thought to sit with.&#10;Every number here is fiat: money backed by nothing but a promise. Public debt like this almost never shrinks — it is rolled forward, grown, and fresh money is printed to carry it.&#10;So the ruler you measure your wealth with is itself stretching. You are made to hold the currency — a lemon you cannot hand back — while its purchasing power leaks out as the headline climbs.&#10;Getting richer, or is the yardstick getting shorter?">&#9432;</span></div><div class="rsub">'+esc((RAIL.debt&&RAIL.debt.name)||countryName(debtCountry()))+'</div><div id="rail-debt"></div></div>';
   return cards;
 }
 // kick off (on input change) or repaint (on any other re-render) the rail; fetches fire only when
