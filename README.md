@@ -143,13 +143,45 @@ everything in your **browser's local storage** — so the data is still only on 
 it just isn't a portable file and isn't shared anywhere. For real use, run it locally so
 your books live in a file you control and get automatic snapshots.
 
-## Privacy & keeping your data safe
+## Privacy & security
 
-- Nothing leaves your machine except exchange-rate lookups you trigger.
-- Your ledger is a plain JSON file — back it up like any other file. Snapshots give you
-  point-in-time history for free; pointing them (or the ledger) at iCloud/Dropbox gives you
-  off-device copies automatically.
-- Export a full backup any time from **Backup / restore**.
+Everything that keeps your numbers on your machine, in one place:
+
+- **Local-first, loopback-only.** Your books are one JSON file on your machine. The local
+  server listens on `127.0.0.1` only, so nothing off your computer can reach it.
+- **No account, no cloud, no telemetry.** The only traffic that ever leaves is what you
+  trigger — an exchange-rate lookup, or an AI draft.
+- **AI drafting never sends numbers.** When you use OpenRouter to draft an entry, amounts are
+  replaced with `‹num›`, accounts are referred to by letter tokens (A, B, C…) never their ids,
+  and a hard check aborts the request if a single digit survives. There is no toggle. Your key
+  is minted by a browser-only OAuth (PKCE) flow and lives only in your browser.
+- **Your data can't be silently corrupted.** Every file carries a `schemaVersion` (a file from
+  a newer version is refused, not overwritten) and an ETag guard (a stale tab can't clobber a
+  fresher save). A timestamped snapshot is written on every change.
+- **Nothing hidden on disk.** Config and snapshots live in a project-local, git-ignored folder
+  you can see — never in system directories.
+- **Browser hardened (what a page can do).** The app turns off spellcheck (so Chrome can't send
+  field text to Google's "enhanced" spell check), marks itself non-translatable, and sends no
+  referrer on outbound requests.
+- **Privacy Mode.** Blur every amount for a screenshot; reveal one at a time.
+- Your ledger is a plain JSON file — back it up like any other. Pointing snapshots (or the
+  ledger) at iCloud/Dropbox gives you off-device copies automatically. Export a full backup any
+  time from **Settings → Export**.
+
+### Browser settings only you can change
+
+A page can't turn off the browser's own data collection. In Chrome, for maximum privacy:
+
+- **Enhanced spell check** (sends typed text to Google) → Settings → Languages → *Spell check*:
+  use **Basic**.
+- **Safe Browsing** (Enhanced sends URLs/content) → Privacy and security → Security: **Standard**
+  or No protection.
+- **Address-bar suggestions** → Privacy and security → *Search suggestions*: turn off
+  "Autocomplete searches and URLs".
+- **Usage stats & Sync** → don't sign in / disable Sync, and turn off "Help improve Chrome".
+
+For maximum isolation, run the app in a browser without Google services (ungoogled-chromium or
+Firefox). These recommendations are also in the app under **Settings → Privacy recommendations**.
 
 ## License
 
