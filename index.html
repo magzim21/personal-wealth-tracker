@@ -255,6 +255,10 @@ table.register thead th{background:var(--surface-2)}
 .sfield>span{color:var(--muted)}
 .sfield select{font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px;max-width:320px}
 .sfield .themeseg{max-width:240px}
+.palrow{display:flex;flex-wrap:wrap;gap:9px}
+.palswatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--sw);cursor:pointer;padding:0;transition:transform .1s}
+.palswatch:hover{transform:scale(1.12)}
+.palswatch.on{outline:2px solid var(--ink);outline-offset:2px;border-color:var(--surface)}
 .chkrow input{width:auto;margin:0}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
@@ -490,10 +494,29 @@ function txDiff(a,b){ const ch=[];
   const la=linesSummary(a),lb=linesSummary(b); if(la!==lb) ch.push({field:"lines",from:la,to:lb});
   return ch; }
 const THEMES=[["auto","Auto"],["light","Light"],["dark","Dark"]];
+// Curated palettes = a hue rotation of the app's own green, reusing its proven saturation/lightness
+// per theme, so every one matches and reads on both light and dark. Semantic red/green stay fixed.
+const PALETTES=[
+  {id:"evergreen",name:"Evergreen",h:162},{id:"teal",name:"Teal",h:186},{id:"ocean",name:"Ocean",h:208},
+  {id:"indigo",name:"Indigo",h:246},{id:"violet",name:"Violet",h:283},{id:"magenta",name:"Magenta",h:326},
+  {id:"ember",name:"Ember",h:20},{id:"amber",name:"Amber",h:44}
+];
+const paletteById=id=>PALETTES.find(p=>p.id===id)||PALETTES[0];
+function isDarkNow(){ const t=(S&&S.settings&&S.settings.theme)||"auto"; if(t==="dark")return true; if(t==="light")return false; try{return matchMedia("(prefers-color-scheme:dark)").matches;}catch(_){return false;} }
+function swatchColor(h){ return isDarkNow()?`hsl(${h} 50% 53%)`:`hsl(${h} 54% 34%)`; }
+function applyPalette(){
+  const r=document.documentElement, id=(S&&S.settings&&S.settings.palette)||"evergreen";
+  if(id==="evergreen"){ ["--accent","--accent-ink","--accent-soft"].forEach(k=>r.style.removeProperty(k)); return; } // default = the exact CSS values
+  const h=paletteById(id).h, hsl=(s,l,a)=>`hsl(${h} ${s}% ${l}%${a!=null?` / ${a}`:""})`;
+  if(isDarkNow()){ r.style.setProperty("--accent",hsl(50,53)); r.style.setProperty("--accent-ink",hsl(50,66)); r.style.setProperty("--accent-soft",hsl(32,16,.55)); }
+  else{ r.style.setProperty("--accent",hsl(54,27)); r.style.setProperty("--accent-ink",hsl(60,20)); r.style.setProperty("--accent-soft",hsl(30,92)); }
+}
 function applyTheme(){
   const t=(S&&S.settings&&S.settings.theme)||"auto", r=document.documentElement;
   if(t==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",t);
+  applyPalette();   // recompute the accent for whichever theme is now active
 }
+try{ matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{ if(((S&&S.settings&&S.settings.theme)||"auto")==="auto") applyPalette(); }); }catch(_){}
 
 const acctById=id=>S.accounts.find(a=>a.id===id);
 const typeById=id=>S.types.find(t=>t.id===id);
@@ -1095,6 +1118,9 @@ function renderModal(){
           <div class="sfield"><span>Theme</span>
             <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
           </div>
+          <div class="sfield"><span>Colors</span>
+            <div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>
+          </div>
         </div>
         <div>
           <div style="${eb}">AI drafting (OpenRouter) <span class="infodot" data-tip="Only «Draft legs» sends anything, to OpenRouter with your key: your words and your account NAMES (every number stripped first). Account ids, amounts, balances and rates never leave — a hard check blocks the request on any digit.&#10;Privacy tip: the names ARE sent, so for more anonymity avoid identifying ones — e.g. «Frank's car» or «blue car», not the make and year.">&#9432;</span></div>
@@ -1305,6 +1331,7 @@ document.addEventListener("click",e=>{
     case "tab": goHash("#/"+el.dataset.view); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
+    case "set-palette": S.settings.palette=el.dataset.pal; applyPalette(); save(); render(); renderModal(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
       const head=el.closest(".typehead");
