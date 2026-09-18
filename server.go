@@ -43,7 +43,8 @@ func defaultConfigDir() string {
 	if v := os.Getenv("PWT_CONFIG_DIR"); v != "" {
 		return v
 	}
-	return filepath.Join(home(), "Library", "Application Support", "PersonalWealthTracker")
+	wd, _ := os.Getwd()
+	return filepath.Join(wd, ".pwt") // project-local (git-ignored), not a hidden system folder
 }
 
 var (

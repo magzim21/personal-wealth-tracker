@@ -118,6 +118,23 @@ The server exposes a small JSON API at `http://127.0.0.1:8123` — see
 no authentication: the protection is that the port isn't reachable off-machine. CI checks
 that `openapi.yaml` stays in sync with the routes (`scripts/check-openapi.mjs`).
 
+### Data model & migrations (for developers)
+
+The **server never interprets your data** — it only stores and serves the raw JSON bytes.
+All schema knowledge lives in the **frontend** (`index.html`): the ledger carries a
+`schemaVersion`, and `SCHEMA` in the app is the version this build understands.
+
+**Migrations run in the browser, on load.** When the app opens a file, `normalizeState()`
+(and, for bigger structural changes, `migrate()`) backfills any missing/renamed fields
+*in place*, stamps the current `schemaVersion`, and saves the upgraded book back. Backfills
+are **idempotent** — they only fill what's absent — so loading an old file simply upgrades it,
+and loading it again is a no-op. To evolve the shape: add the backfill, bump `SCHEMA`, and keep
+both the app (`VERSION`) and server (`APP_VERSION`) in step.
+
+Guardrails: the app **refuses to open a file written by a newer `schemaVersion`** (so an old
+build can't corrupt a newer file), the server writes a timestamped snapshot on every save, and
+writes are gated by an ETag/`If-Match` check so a stale tab can't clobber a fresher file.
+
 ## About the online demo
 
 The **[live demo](https://personal-wealth-tracker.maxim.run/)** (GitHub Pages) is there so

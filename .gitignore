@@ -15,3 +15,6 @@ backups/
 personal-wealth-tracker
 server
 node_modules/
+
+# server config (project-local; was ~/Library/Application Support)
+.pwt/
