@@ -260,6 +260,13 @@ table.register thead th{background:var(--surface-2)}
 .palswatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--sw);cursor:pointer;padding:0;transition:transform .1s}
 .palswatch:hover{transform:scale(1.12)}
 .palswatch.on{outline:2px solid var(--ink);outline-offset:2px;border-color:var(--surface)}
+/* Privacy Mode: blur every amount; click one to reveal it */
+.privbtn{display:inline-flex;align-items:center;gap:6px}
+.privbtn svg{width:15px;height:15px}
+.privbtn.on{border-color:var(--accent);color:var(--accent)}
+.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub){filter:blur(.42em);cursor:pointer;border-radius:4px;transition:filter .12s;user-select:none}
+.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub):hover{filter:blur(.3em)}
+.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub).revealed{filter:none}
 .chkrow input{width:auto;margin:0}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
@@ -463,8 +470,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -574,12 +581,14 @@ const I={
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>',
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeoff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 4.6A10 10 0 0 1 12 4.5c6.5 0 10 7 10 7a17 17 0 0 1-2.4 3.1"/><path d="M6.1 6.1A16.8 16.8 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 3.9-.8"/></svg>',
   coin:'<svg viewBox="0 0 24 24" style="width:23px;height:23px"><defs><radialGradient id="coinF" cx="37%" cy="32%" r="82%"><stop offset="0%" stop-color="#fbfcfc"/><stop offset="52%" stop-color="#d9dde1"/><stop offset="100%" stop-color="#a7adb4"/></radialGradient><linearGradient id="coinR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c7ccd1"/><stop offset="100%" stop-color="#7e848b"/></linearGradient></defs><circle cx="12" cy="12" r="10.4" fill="url(#coinR)"/><circle cx="12" cy="12" r="8.7" fill="url(#coinF)"/><circle cx="12" cy="12" r="8.7" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".7"/><circle cx="12" cy="12" r="6.7" fill="none" stroke="#868c93" stroke-opacity=".5" stroke-width=".8"/><ellipse cx="9" cy="8.4" rx="3.4" ry="2.2" fill="#fff" opacity=".33" transform="rotate(-25 9 8.4)"/><g fill="#6b7178"><ellipse cx="11.1" cy="14.2" rx="4" ry="2.6"/><circle cx="14.5" cy="11.4" r="2.15"/><path d="M16.3 10.8 L18.5 11.35 L16.3 12.5 Z"/><path d="M7.4 12.6 L5.2 11.7 L7.7 13.5 Z"/></g><circle cx="15.05" cy="10.85" r=".5" fill="#eceef0"/></svg>',
 };
 
 function render(){
   document.getElementById("app").innerHTML=`
-  <div class="app">
+  <div class="app${UI.privacy?" privacy":""}">
     <aside class="side">
       <div class="brand"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav">
@@ -604,9 +613,8 @@ function render(){
         <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="dashboard"?"Dashboard":UI.view==="accounts"?"Accounts":"Ledger"}</h2>
         <div class="grow"></div>
         <span class="ver">${VERSION} · ${verInfo().label} · ${UPDATED}${verInfo().committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${verInfo().migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}</span>
-        ${UI.view==="accounts"
-          ? `<button class="btn" data-action="new-acct">${I.plus}Add account</button>`
-          : `<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
+        <button class="btn sm privbtn${UI.privacy?" on":""}" data-action="toggle-privacy" data-tip="Privacy Mode — blur every amount for screen-sharing. With it on, click any number to reveal just that one.">${UI.privacy?I.eyeoff:I.eye}<span>Privacy</span></button>
+        <button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>
       </div>
       ${warnBanner()}
       <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
@@ -1326,9 +1334,12 @@ function applyHash(){
 function goHash(h){ if(location.hash===h){ render(); } else { location.hash=h; } } // set URL → hashchange re-renders; force a render if it's already there
 window.addEventListener("hashchange",()=>{ applyHash(); render(); });
 document.addEventListener("click",e=>{
+  // Privacy Mode: with amounts blurred, a click on any number reveals just that one (for screenshots).
+  if(UI.privacy){ const amt=e.target.closest(".cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub"); if(amt){ amt.classList.toggle("revealed"); return; } }
   const el=e.target.closest("[data-action]"); if(!el) return;
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
+    case "toggle-privacy": UI.privacy=!UI.privacy; saveUIPrefs(); render(); break;
     case "tab": goHash("#/"+el.dataset.view); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
