@@ -29,7 +29,7 @@ func git(args ...string) string {
 }
 
 const project = "personal-wealth-tracker"
-const appVersion = "v49" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
+const appVersion = "v50" // bump together with index.html's VERSION; the app warns if they differ (restart needed)
 const snapKeep = 300
 
 // etagOf is an optimistic-concurrency token derived from the file's bytes: it changes on every
