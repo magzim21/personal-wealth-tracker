@@ -83,6 +83,19 @@ input,select{font-family:inherit;color:var(--ink)}
 .barrow .bfill{display:block;height:100%;border-radius:5px;background:var(--muted)}
 .barrow .bfill.cls-asset{background:var(--accent)} .barrow .bfill.cls-liability{background:var(--neg)} .barrow .bfill.cls-equity{background:#2f6db3}
 .barrow .bv{flex:0 0 auto;font-family:var(--fs-mono);font-variant-numeric:tabular-nums;color:var(--muted);min-width:66px;text-align:right}
+/* About page */
+.about{display:flex;flex-direction:column;gap:20px;max-width:920px;margin:0 auto}
+.about-hero{text-align:center;padding:20px 0 4px}
+.about-mark{width:52px;height:52px;margin:0 auto 12px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.about-mark svg{width:30px!important;height:30px!important}
+.about-name{font-family:var(--fs-serif,Georgia,serif);font-weight:700;font-size:clamp(26px,5vw,38px);letter-spacing:-.01em}
+.about-tag{color:var(--muted);font-size:16px;line-height:1.5;max-width:54ch;margin:8px auto 0}
+.about-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.about-card{background:var(--surface);border:1px solid var(--line);border-top:2px solid var(--accent);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 17px}
+.about-card h3{margin:2px 0 6px;font-size:15px;font-weight:600}
+.about-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+.about-foot{text-align:center;color:var(--faint);font-size:12.5px;padding:8px 0 4px}
+.about-foot a{color:var(--accent)}
 .nav button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 2px}
 .curpick{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
@@ -596,7 +609,7 @@ function render(){
     <aside class="side">
       <div class="brand"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
       <nav class="nav">
-        ${[["accounts","Accounts"],["ledger","Ledger"],["dashboard","Dashboard"]].map(([v,l])=>{
+        ${[["accounts","Accounts"],["ledger","Ledger"],["dashboard","Dashboard"],["about","About"]].map(([v,l])=>{
           const isHome=(UI.homeView||"accounts")===v;
           return `<div class="navitem">
             <button class="navlink${UI.view===v?" on":""}" data-action="tab" data-view="${v}">${l}</button>
@@ -614,14 +627,14 @@ function render(){
     </aside>
     <div class="main">
       <div class="mainhead">
-        <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="dashboard"?"Dashboard":UI.view==="accounts"?"Accounts":"Ledger"}</h2>
+        <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="dashboard"?"Dashboard":UI.view==="about"?"About":UI.view==="accounts"?"Accounts":"Ledger"}</h2>
         <div class="grow"></div>
         <span class="ver">${VERSION} · ${verInfo().label} · ${UPDATED}${verInfo().committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${verInfo().migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}</span>
         <button class="btn sm privbtn${UI.privacy?" on":""}" data-action="toggle-privacy" data-tip="Privacy Mode — blur every amount for screen-sharing. With it on, click any number to reveal just that one.">${UI.privacy?I.eyeoff:I.eye}<span>Privacy</span></button>
-        <button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>
+        ${UI.view==="about"?"":`<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
       </div>
       ${warnBanner()}
-      <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
+      <div class="content">${UI.view==="account"?viewAccount(UI.accountId):UI.view==="dashboard"?viewDashboard():UI.view==="about"?viewAbout():UI.view==="accounts"?viewAccounts():viewLedger()}</div>
     </div>
   </div>`;
   animateCounts();
@@ -699,6 +712,27 @@ function sortTxs(arr){
     }
   });
   return arr;
+}
+function viewAbout(){
+  const items=[
+    ["Real double-entry","Not a spending tracker — a proper chart of accounts with balanced debits and credits. Assets = Liabilities + Equity, always, and you can't post to the wrong kind of account."],
+    ["Local-first & private","No account, no cloud, no telemetry. Everything lives on your machine. The only time it touches the internet is when you click “fetch exchange rates”."],
+    ["You own your data","One plain JSON file, pointed wherever you like — local disk, a mounted drive, or iCloud so it follows you between machines. A timestamped snapshot is written on every save."],
+    ["Multi-currency","Each account keeps its own currency; balances convert to your display currency using rates you control or fetch live."],
+    ["Tamper-evident history","Every create, edit and delete lands in an append-only Activity log. Deleting is a reversible soft-delete — nothing is silently lost."],
+    ["Privacy Mode","Blur every amount for screen-sharing, then click a single number to reveal just that one."],
+    ["Safe by design","A schema version refuses to open a file written by a newer app, and a revision guard stops a stale tab from overwriting a fresher save."],
+    ["Yours to keep","One index.html and a tiny Node or Go server. No build step, no framework, no lock-in — take it and run."]
+  ];
+  return `<div class="about">
+    <div class="about-hero">
+      <div class="about-mark">${I.coin}</div>
+      <div class="about-name">Ledgerbook</div>
+      <p class="about-tag">Double-entry bookkeeping that fits in one file — and stays on your computer.</p>
+    </div>
+    <div class="about-grid">${items.map(([t,d])=>`<div class="about-card"><h3>${esc(t)}</h3><p>${esc(d)}</p></div>`).join("")}</div>
+    <div class="about-foot">${VERSION} · a local-first, self-hosted personal ledger · <a href="https://github.com/magzim21/personal-wealth-tracker" target="_blank" rel="noopener">source on GitHub</a></div>
+  </div>`;
 }
 function viewDashboard(){
   const A=classTotalBase("asset"), L=classTotalBase("liability"), E=classTotalBase("equity");
@@ -1331,6 +1365,7 @@ function applyHash(){
   const parts=(location.hash||"").replace(/^#\/?/,"").split("/");
   if(parts[0]==="ledger"){ UI.view="ledger"; }
   else if(parts[0]==="dashboard"){ UI.view="dashboard"; }
+  else if(parts[0]==="about"){ UI.view="about"; }
   else if(parts[0]==="account"&&parts[1]){ const id=decodeURIComponent(parts[1]); if(acctById(id)){ UI.view="account"; UI.accountId=id; } else { UI.view="accounts"; } }
   else if(parts[0]==="accounts"){ UI.view="accounts"; }
   else { UI.view=UI.homeView||"accounts"; }   // a bare URL opens your chosen homepage
