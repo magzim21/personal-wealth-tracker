@@ -210,10 +210,14 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
 .grouphead{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .grouphead .ghright{display:flex;align-items:center;gap:8px}
 .grouphead h3{font-size:15px}
-/* class colour: a thin left tick keys each account block to its class (asset / liability / equity) */
+/* class colour: one CONTINUOUS left strip keyed to the class (asset / liability / equity).
+   It runs unbroken down the whole block, but tapers thinner where it passes a type header
+   and swells back to full weight along the account rows — a subtle thick/thin rhythm.
+   Inset box-shadow (not border) so it never shifts the row text. */
 .groupwrap{--ctick:var(--line-strong)}
 .groupwrap.cls-asset{--ctick:var(--accent)} .groupwrap.cls-liability{--ctick:var(--neg)} .groupwrap.cls-equity{--ctick:#2f6db3}
-.groupwrap .acctwrap{border-left:2.5px solid var(--ctick)}
+.groupwrap .typehead{box-shadow:inset 1.5px 0 0 var(--ctick)}
+.groupwrap .acctwrap{box-shadow:inset 3px 0 0 var(--ctick)}
 .grouphead .total{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--muted)}
 .arow{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
 /* Compact density: tighten row/card padding for people who want more on screen (Settings › Appearance) */
