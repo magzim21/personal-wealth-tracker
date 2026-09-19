@@ -427,9 +427,13 @@ table.register thead th{background:var(--surface-2)}
 .acctpanel-search{padding:8px;border-bottom:1px solid var(--line)}
 .acctpanel-search input{width:100%}
 .acctpanel-list{overflow:auto;padding:3px 0}
-/* 3-level indent: class (0) › type (1) › account (2); the class colour lives on the block strip */
-.acctopt-class{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--faint));padding:7px 12px 2px 10px}
-.acctopt-type{font-size:11.5px;font-weight:600;color:var(--muted);padding:3px 12px 2px 22px}
+/* 3-level indent: class (0) › type (1) › account (2); the class colour lives on the block strip.
+   Class/type headers carry a right-aligned + to create an account right there. */
+.acctopt-class{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--faint));padding:5px 6px 2px 10px}
+.acctopt-type{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted);padding:2px 6px 2px 22px}
+.acctadd{flex:none;display:grid;place-items:center;width:22px;height:20px;border:0;background:none;color:var(--faint);cursor:pointer;border-radius:5px}
+.acctadd svg{width:14px;height:14px}
+.acctadd:hover{color:var(--accent);background:var(--surface-2)}
 .acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px 5px 34px;border:0;background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .acctopt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acctopt-amt{flex:none;font-family:var(--fs-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -1650,7 +1654,7 @@ function lineRow(l,i){
   const selCls=sel?classOf(sel):"";
   const open=UI.acctPickOpen===i;
   return `<div class="line" data-i="${i}">
-    <div class="acctcell"><button class="iconbtn addnew" data-action="leg-new-acct" data-i="${i}" data-tip="Create a new account for this leg" aria-label="New account">${I.plus}</button>
+    <div class="acctcell">
       <div class="acctpick${open?" open":""}" data-i="${i}">
         <input type="hidden" data-line="acct" data-i="${i}" value="${escAttr(l.accountId||"")}">
         <button type="button" class="acctpick-btn${sel?"":" ph"}${selCls?" cls-"+selCls:""}" data-action="acct-open" data-i="${i}" aria-haspopup="listbox" aria-expanded="${open}">
@@ -1675,11 +1679,11 @@ function acctPickListBody(i,selId,exclude,rawq){
         .filter(a=>!(exclude&&exclude.has(a.id)&&a.id!==selId))
         .filter(a=>!q||a.name.toLowerCase().includes(q)||cl.toLowerCase().includes(q)||t.name.toLowerCase().includes(q));
       if(!accts.length) return;
-      inner+=`<div class="acctopt-type cls-${ck}">${esc(t.name)}</div>`;
+      inner+=`<div class="acctopt-type"><span>${esc(t.name)}</span><button type="button" class="acctadd" data-action="acct-add" data-i="${i}" data-class="${ck}" data-type="${t.id}" data-tip="New account in ${esc(t.name)}" aria-label="New account in ${esc(t.name)}">${I.plus}</button></div>`;
       accts.forEach(a=>{ const bal=money(toBase(balance(a.id),accCur(a)));
         inner+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}"><span class="acctopt-name">${esc(a.name)}</span><span class="acctopt-amt num">${bal}</span></button>`; });
     });
-    if(inner) body+=`<div class="acctopt-classblock cls-${ck}"><div class="acctopt-class">${esc(cl)}</div>${inner}</div>`;
+    if(inner) body+=`<div class="acctopt-classblock cls-${ck}"><div class="acctopt-class"><span>${esc(cl)}</span><button type="button" class="acctadd" data-action="acct-add" data-i="${i}" data-class="${ck}" data-tip="New ${esc(cl)} account" aria-label="New ${esc(cl)} account">${I.plus}</button></div>${inner}</div>`;
   }
   if(!body) body=`<div class="acctopt-empty">No accounts match “${esc(q)}”.</div>`;
   if(selId) body+=`<button type="button" class="acctopt acctopt-clear" data-action="acct-choose" data-i="${i}" data-id="">— clear —</button>`;
@@ -1806,6 +1810,12 @@ document.addEventListener("click",e=>{
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
     case "acct-choose": { const i=+el.dataset.i; syncLines(); UI.modal.draft.lines[i].accountId=el.dataset.id||""; UI.acctPickOpen=null; UI.acctPickFilter=""; renderModal(); break; }
+    case "acct-add": { // create a new account for this leg, pre-filed under the class/type the + sat on
+      const i=+el.dataset.i, cls=el.dataset.class, tid=el.dataset.type||"";
+      syncLines(); UI.acctPickOpen=null; UI.acctPickFilter="";
+      const typeId=tid || (S.types.find(t=>t.class===cls)||{}).id || "__new";
+      UI.sub={legIndex:i,draft:{class:cls,typeId,newType:"",name:"",currency:base()}};
+      renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); const de=document.getElementById("tx-date"); if(de) de.value=UI.modal.draft.date; break; }
     case "save-tx": saveTx(); break;
     case "del-tx-modal": { const did=UI.modal.id; dismissModal(); softDeleteTx(did); break; }
