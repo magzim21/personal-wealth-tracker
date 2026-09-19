@@ -417,17 +417,20 @@ table.register thead th{background:var(--surface-2)}
 .acctpick-chev{flex:none;display:flex;color:var(--faint)}
 .acctpick-chev svg{width:15px;height:15px;transition:transform .18s}
 .acctpick.open .acctpick-chev svg{transform:rotate(180deg)}
-.acctpick-btn.cls-asset,.acctopt.cls-asset,.acctopt-head.cls-asset{--c:var(--accent)}
-.acctpick-btn.cls-liability,.acctopt.cls-liability,.acctopt-head.cls-liability{--c:var(--neg)}
-.acctpick-btn.cls-equity,.acctopt.cls-equity,.acctopt-head.cls-equity{--c:#2f6db3}
+.acctpick-btn.cls-asset,.acctopt-classblock.cls-asset{--c:var(--accent)}
+.acctpick-btn.cls-liability,.acctopt-classblock.cls-liability{--c:var(--neg)}
+.acctpick-btn.cls-equity,.acctopt-classblock.cls-equity{--c:#2f6db3}
+/* one continuous 2px colour strip down the whole class block (identity by class) */
+.acctopt-classblock{border-left:2px solid var(--c);margin-top:3px}
+.acctopt-classblock:first-child{margin-top:0}
 .acctpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);width:280px;max-height:340px;display:flex;flex-direction:column;overflow:hidden}
 .acctpanel-search{padding:8px;border-bottom:1px solid var(--line)}
 .acctpanel-search input{width:100%}
 .acctpanel-list{overflow:auto;padding:3px 0}
-/* 3-level indent: class (0) › type (1) › account (2), each keyed to the class colour */
-.acctopt-class{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--faint));padding:7px 12px 2px 12px;border-left:3px solid var(--c,transparent);margin-top:2px}
-.acctopt-type{font-size:11.5px;font-weight:600;color:var(--muted);padding:3px 12px 2px 24px;border-left:3px solid var(--c,transparent)}
-.acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px 5px 36px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+/* 3-level indent: class (0) › type (1) › account (2); the class colour lives on the block strip */
+.acctopt-class{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--faint));padding:7px 12px 2px 10px}
+.acctopt-type{font-size:11.5px;font-weight:600;color:var(--muted);padding:3px 12px 2px 22px}
+.acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px 5px 34px;border:0;background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .acctopt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acctopt-amt{flex:none;font-family:var(--fs-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .acctopt:hover{background:var(--surface-2)}
@@ -1676,7 +1679,7 @@ function acctPickListBody(i,selId,exclude,rawq){
       accts.forEach(a=>{ const bal=money(toBase(balance(a.id),accCur(a)));
         inner+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}"><span class="acctopt-name">${esc(a.name)}</span><span class="acctopt-amt num">${bal}</span></button>`; });
     });
-    if(inner) body+=`<div class="acctopt-class cls-${ck}">${esc(cl)}</div>${inner}`;
+    if(inner) body+=`<div class="acctopt-classblock cls-${ck}"><div class="acctopt-class">${esc(cl)}</div>${inner}</div>`;
   }
   if(!body) body=`<div class="acctopt-empty">No accounts match “${esc(q)}”.</div>`;
   if(selId) body+=`<button type="button" class="acctopt acctopt-clear" data-action="acct-choose" data-i="${i}" data-id="">— clear —</button>`;
