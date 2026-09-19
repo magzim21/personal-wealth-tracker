@@ -212,7 +212,34 @@ input,select{font-family:inherit;color:var(--ink)}
 .btn.sm{padding:5px 9px;font-size:12.5px}
 .btn.xs{padding:4px 8px;font-size:11.5px;white-space:nowrap}
 .datewrap{display:flex;gap:6px;align-items:stretch}
-.datewrap input[type=date]{flex:1 1 auto;min-width:0}
+/* custom date picker (native calendar popup can't be themed) */
+.datepick{position:relative;flex:1 1 auto;min-width:0}
+.datepick-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.datepick-btn:hover{border-color:var(--muted)}
+.datepick.open .datepick-btn{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.datepick-ic{flex:none;display:flex;color:var(--muted)}
+.datepick-ic svg{width:16px;height:16px}
+.datepick-val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.datepanel{position:fixed;z-index:120;width:272px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-lift);padding:10px}
+.dp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.dp-title{font-weight:700;font-size:14px}
+.dp-nav{display:grid;place-items:center;width:28px;height:28px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:7px}
+.dp-nav:hover{background:var(--surface-2);color:var(--accent)}
+.dp-nav svg{width:16px;height:16px}
+.dp-nav:first-child svg{transform:rotate(90deg)}
+.dp-nav:last-child svg{transform:rotate(-90deg)}
+.dp-week{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px}
+.dp-week span{text-align:center;font-size:11px;font-weight:600;color:var(--faint);padding:2px 0}
+.dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.dcell{height:32px;border:0;background:none;border-radius:7px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.dcell:hover{background:var(--surface-2)}
+.dcell.out{color:var(--faint)}
+.dcell.today{font-weight:800;color:var(--accent)}
+.dcell.sel{background:var(--accent);color:#fff;font-weight:700}
+.dcell.sel.today{color:#fff}
+.dp-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.dp-link{border:0;background:none;color:var(--accent);font:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:2px 4px}
+.dp-link:hover{text-decoration:underline}
 .btn:disabled{opacity:.5;cursor:default}
 .btn svg{width:16px;height:16px}
 .iconbtn{background:none;border:0;color:var(--faint);padding:6px;border-radius:6px;display:grid;place-items:center}
@@ -753,6 +780,7 @@ const I={
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>',
   chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>',
   filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>',
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
   eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -1198,7 +1226,7 @@ function softDeleteTx(did){
 /* animate the modal out, then clear it and run an optional callback */
 function dismissModal(cb){
   const ov=document.querySelector(".overlay");
-  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
+  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
   if(!ov || window.matchMedia("(prefers-reduced-motion:reduce)").matches){ finish(); return; }
   ov.classList.add("closing");
   setTimeout(finish,160);
@@ -1375,7 +1403,7 @@ function txModal(existing){
   // for a brand-new entry, seed the two legs with the accounts used last time (skip any that were since deleted)
   const seed=()=>{ const ex=(LAST_LEGS||[]).filter(id=>S.accounts.some(a=>a.id===id&&!a.deleted)); return [{accountId:ex[0]||"",debit:0,credit:0},{accountId:ex[1]||"",debit:0,credit:0}]; };
   const t=existing||{date:todayAccounting(),description:"",lines:seed()};
-  UI.acctPickOpen=null; UI.acctPickFilter="";
+  UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; UI.dateView="";
   UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
   renderModal();
   // smart form: land the cursor in Description so typing can start immediately (new entries only)
@@ -1578,7 +1606,7 @@ go run server.go          # Go</pre>
       <div class="modal-h"><h3>${UI.modal.id?"Edit transaction":"New transaction"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <div class="grid2">
-          <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><div class="datewrap"><input type="date" id="tx-date" value="${d.date}"><button type="button" class="btn xs" data-action="tx-today" title="Set to today">Today</button></div></label>
+          <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><div class="datewrap"><div class="datepick${UI.datePickOpen?" open":""}" id="datepick"><input type="hidden" id="tx-date" value="${d.date}"><button type="button" class="datepick-btn" data-action="date-open" aria-haspopup="dialog" aria-expanded="${!!UI.datePickOpen}"><span class="datepick-ic">${I.cal}</span><span class="datepick-val">${d.date?esc(fmtDateHuman(d.date)):"Pick a date"}</span></button>${UI.datePickOpen?datePanel(d.date):""}</div><button type="button" class="btn xs" data-action="tx-today" title="Set to today">Today</button></div></label>
           <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="${(S.settings.accountingMode==="business")?"e.g. Cash sale":"e.g. Groceries"}"></label>
         </div>
         <div class="legs${d.lines.length>2?" has-x":""}">
@@ -1678,6 +1706,43 @@ function lineRow(l,i){
     ${(UI.modal.draft.lines.length>2) ? (i>=2 ? `<button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>` : `<span></span>`) : ""}
   </div>`;
 }
+// custom date picker (the native <input type=date> calendar popup is browser chrome and can't be
+// themed) — a small month grid that matches the app's type, shape and colour.
+const DP_MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DP_WD=["S","M","T","W","T","F","S"];
+const dpPad=n=>String(n).padStart(2,"0");
+const dpYmd=(y,m,d)=>y+"-"+dpPad(m)+"-"+dpPad(d);
+function fmtDateHuman(v){ if(!v) return ""; const [y,m,d]=String(v).split("-").map(Number); if(!y) return String(v); return DP_MONTHS[m-1].slice(0,3)+" "+d+", "+y; }
+function datePanel(sel){
+  let vm=UI.dateView || (sel||todayAccounting()).slice(0,7);
+  const [vy,vmo]=vm.split("-").map(Number);
+  const startDow=new Date(vy,vmo-1,1).getDay();
+  const daysInMonth=new Date(vy,vmo,0).getDate();
+  const prevDays=new Date(vy,vmo-1,0).getDate();
+  const today=todayAccounting();
+  let cells="";
+  for(let i=0;i<startDow;i++){ const d=prevDays-startDow+1+i; cells+=`<button type="button" class="dcell out" data-action="date-pick" data-date="${dpYmd(vmo===1?vy-1:vy,vmo===1?12:vmo-1,d)}">${d}</button>`; }
+  for(let d=1;d<=daysInMonth;d++){ const val=dpYmd(vy,vmo,d); cells+=`<button type="button" class="dcell${val===sel?" sel":""}${val===today?" today":""}" data-action="date-pick" data-date="${val}">${d}</button>`; }
+  const filled=startDow+daysInMonth, trail=(7-(filled%7))%7;
+  for(let i=1;i<=trail;i++){ cells+=`<button type="button" class="dcell out" data-action="date-pick" data-date="${dpYmd(vmo===12?vy+1:vy,vmo===12?1:vmo+1,i)}">${i}</button>`; }
+  return `<div class="datepanel" id="datepanel" role="dialog" aria-label="Choose date">
+    <div class="dp-head"><button type="button" class="dp-nav" data-action="date-prev" aria-label="Previous month">${I.chev}</button>
+      <span class="dp-title">${DP_MONTHS[vmo-1]} ${vy}</span>
+      <button type="button" class="dp-nav" data-action="date-next" aria-label="Next month">${I.chev}</button></div>
+    <div class="dp-week">${DP_WD.map(w=>`<span>${w}</span>`).join("")}</div>
+    <div class="dp-grid">${cells}</div>
+    <div class="dp-foot"><span></span><button type="button" class="dp-link" data-action="date-today">Today</button></div>
+  </div>`;
+}
+function positionDatePanel(){
+  const wrap=document.getElementById("datepick"); if(!wrap) return;
+  const btn=wrap.querySelector(".datepick-btn"), panel=wrap.querySelector(".datepanel"); if(!btn||!panel) return;
+  const r=btn.getBoundingClientRect(), ph=panel.offsetHeight, vh=window.innerHeight, vw=window.innerWidth;
+  panel.style.top=(vh-r.bottom < ph+8 && r.top > ph+8) ? (r.top-ph-4)+"px" : (r.bottom+4)+"px";
+  let left=r.left, pw=panel.offsetWidth; if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+  panel.style.left=left+"px";
+}
+function closeDatePanel(){ UI.datePickOpen=false; const p=document.getElementById("datepanel"); if(p) p.remove(); const w=document.getElementById("datepick"); if(w) w.classList.remove("open"); }
 // custom colour-coded account picker (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts).
 // The list is a 3-level indent — class › type › account — for at-a-glance hierarchy.
 function acctPickListBody(i,selId,exclude,rawq){
@@ -1828,7 +1893,11 @@ document.addEventListener("click",e=>{
       const typeId=tid || (S.types.find(t=>t.class===cls)||{}).id || "__new";
       UI.sub={legIndex:i,draft:{class:cls,typeId,newType:"",name:"",currency:base()}};
       renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
-    case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); const de=document.getElementById("tx-date"); if(de) de.value=UI.modal.draft.date; break; }
+    case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
+    case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
+    case "date-prev": case "date-next": { const vm=UI.dateView||(UI.modal.draft.date||todayAccounting()).slice(0,7); let [y,m]=vm.split("-").map(Number); m+=(a==="date-next"?1:-1); if(m<1){m=12;y--;} if(m>12){m=1;y++;} UI.dateView=y+"-"+String(m).padStart(2,"0"); renderModal(); positionDatePanel(); break; }
+    case "date-pick": { UI.modal.draft.date=el.dataset.date; UI.dateView=el.dataset.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
+    case "date-today": { UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
     case "save-tx": saveTx(); break;
     case "del-tx-modal": { const did=UI.modal.id; dismissModal(); softDeleteTx(did); break; }
   }
@@ -1838,6 +1907,7 @@ document.addEventListener("keydown",e=>{
   if(UI.sub){ if(e.key==="Escape"){ UI.sub=null; renderModal(); } else if(e.key==="Enter"){ e.preventDefault(); subCreate(); } return; }   // sub-modal takes keys first
   if(!UI.modal) return;
   if(e.key==="Escape" && UI.acctPickOpen!=null){ closeAcctPanel(); return; }   // Esc closes an open account picker first, not the whole modal
+  if(e.key==="Escape" && UI.datePickOpen){ closeDatePanel(); return; }
   if(e.key==="Escape"){ dismissModal(); return; }
   if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; dismissModal(fn); }
 });
@@ -1857,7 +1927,10 @@ function closeAcctPanel(){ // lightweight close (no full re-render) so a click t
   const p=document.querySelector(".acctpanel"); if(p) p.remove();
   document.querySelectorAll(".acctpick.open").forEach(el=>{ el.classList.remove("open"); const b=el.querySelector(".acctpick-btn"); if(b) b.setAttribute("aria-expanded","false"); });
 }
-document.addEventListener("mousedown",e=>{ if(UI.acctPickOpen==null) return; if(e.target.closest(".acctpick")) return; closeAcctPanel(); },true); // click outside closes
+document.addEventListener("mousedown",e=>{ // click outside closes an open picker/calendar
+  if(UI.acctPickOpen!=null && !e.target.closest(".acctpick")) closeAcctPanel();
+  if(UI.datePickOpen && !e.target.closest(".datepick")) closeDatePanel();
+},true);
 document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter: rebuild only the list body (search input untouched, so it keeps focus)
   UI.acctPickFilter=f.value; const i=UI.acctPickOpen; if(i==null) return;
   const list=document.getElementById("acctpanel-list-"+i); if(!list) return;
