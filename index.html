@@ -403,6 +403,32 @@ table.register thead th{background:var(--surface-2)}
 .linehead .r{text-align:right}
 .aibar{display:flex;gap:8px;align-items:center}
 .aibar input{flex:1;min-width:0}
+/* ==== custom, colour-coded account picker (replaces the native <select> — long chart of accounts,
+   keyed to class colour like the Accounts view; panel is position:fixed so the modal's overflow can't clip it) ==== */
+.acctpick{position:relative;flex:1;min-width:0}
+.acctpick-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.acctpick-btn:hover{border-color:var(--muted)}
+.acctpick.open .acctpick-btn{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.acctpick-dot{width:9px;height:9px;border-radius:3px;background:var(--c,transparent);flex:none}
+.acctpick-btn.ph .acctpick-dot{display:none}
+.acctpick-val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acctpick-btn.ph .acctpick-val{color:var(--faint)}
+.acctpick-chev{flex:none;display:flex;color:var(--faint)}
+.acctpick-chev svg{width:15px;height:15px;transition:transform .18s}
+.acctpick.open .acctpick-chev svg{transform:rotate(180deg)}
+.acctpick-btn.cls-asset,.acctopt.cls-asset,.acctopt-head.cls-asset{--c:var(--accent)}
+.acctpick-btn.cls-liability,.acctopt.cls-liability,.acctopt-head.cls-liability{--c:var(--neg)}
+.acctpick-btn.cls-equity,.acctopt.cls-equity,.acctopt-head.cls-equity{--c:#2f6db3}
+.acctpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);width:280px;max-height:340px;display:flex;flex-direction:column;overflow:hidden}
+.acctpanel-search{padding:8px;border-bottom:1px solid var(--line)}
+.acctpanel-search input{width:100%}
+.acctpanel-list{overflow:auto;padding:4px 0}
+.acctopt-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--faint));padding:7px 12px 3px;border-left:3px solid var(--c,transparent);margin-top:2px}
+.acctopt{display:flex;align-items:center;width:100%;text-align:left;padding:7px 12px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;color:var(--ink);cursor:pointer}
+.acctopt:hover{background:var(--surface-2)}
+.acctopt.sel{background:var(--accent-soft);font-weight:600}
+.acctopt-clear{--c:var(--line-strong);color:var(--muted);border-top:1px solid var(--line);margin-top:4px}
+.acctopt-empty{padding:14px 12px;color:var(--muted);font-size:13px;text-align:center}
 #tip{position:fixed;z-index:9999;max-width:300px;padding:9px 11px;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:8px;font-size:12px;line-height:1.45;white-space:pre-line;box-shadow:var(--shadow-lift);pointer-events:none;opacity:0;transition:opacity .08s ease}
 #tip.on{opacity:1}
 [data-tip]{cursor:help}
@@ -1152,7 +1178,7 @@ function softDeleteTx(did){
 /* animate the modal out, then clear it and run an optional callback */
 function dismissModal(cb){
   const ov=document.querySelector(".overlay");
-  const finish=()=>{ pendingConfirm=null; UI.modal=null; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
+  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
   if(!ov || window.matchMedia("(prefers-reduced-motion:reduce)").matches){ finish(); return; }
   ov.classList.add("closing");
   setTimeout(finish,160);
@@ -1329,6 +1355,7 @@ function txModal(existing){
   // for a brand-new entry, seed the two legs with the accounts used last time (skip any that were since deleted)
   const seed=()=>{ const ex=(LAST_LEGS||[]).filter(id=>S.accounts.some(a=>a.id===id&&!a.deleted)); return [{accountId:ex[0]||"",debit:0,credit:0},{accountId:ex[1]||"",debit:0,credit:0}]; };
   const t=existing||{date:todayAccounting(),description:"",lines:seed()};
+  UI.acctPickOpen=null; UI.acctPickFilter="";
   UI.modal={kind:"tx",id:existing?existing.id:null,draft:JSON.parse(JSON.stringify(t))};
   renderModal();
   // smart form: land the cursor in Description so typing can start immediately (new entries only)
@@ -1523,9 +1550,9 @@ go run server.go          # Go</pre>
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>${UI.modal.id?"Edit transaction":"New transaction"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        <div class="aibar">${orConnected()
-          ? `<input type="text" id="ai-desc" placeholder="Describe it — e.g. paid rent from checking" value="${escAttr(UI.modal.aiText||"")}"><button class="btn sm primary" data-action="ai-draft" id="ai-draft" data-tip="Sends your words + account names, every number stripped first. Picks the legs only — you enter the amount.">✨ Draft legs</button>`
-          : `<button class="btn sm" data-action="or-connect" style="width:100%" data-tip="Browser-only sign-in that makes your own OpenRouter key, kept in this browser. Nothing sends until «Draft legs», numbers always stripped.">✨ Connect OpenRouter to draft entries with AI</button>`}</div>
+        ${orConnected()
+          ? `<label class="field"><span>✨ Draft with AI <span style="font-weight:400;color:var(--faint)">— optional; plain words become the two legs below</span></span><div class="aibar"><input type="text" id="ai-desc" placeholder="e.g. paid rent from checking" value="${escAttr(UI.modal.aiText||"")}"><button class="btn sm primary" data-action="ai-draft" id="ai-draft" data-tip="Sends your words + account names, every number stripped first. Picks the legs only — you enter the amount.">✨ Draft legs</button></div></label>`
+          : `<div class="aibar"><button class="btn sm" data-action="or-connect" style="width:100%" data-tip="Browser-only sign-in that makes your own OpenRouter key, kept in this browser. Nothing sends until «Draft legs», numbers always stripped.">✨ Connect OpenRouter to draft entries with AI</button></div>`}
         <div class="grid2">
           <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><div class="datewrap"><input type="date" id="tx-date" value="${d.date}"><button type="button" class="btn xs" data-action="tx-today" title="Set to today">Today</button></div></label>
           <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="e.g. Cash sale"></label>
@@ -1607,11 +1634,42 @@ function lineRow(l,i){
     </div>`;
   }
   const used=new Set(((UI.modal&&UI.modal.draft&&UI.modal.draft.lines)||[]).map((x,j)=>j!==i?x.accountId:"").filter(Boolean));
+  const sel=l.accountId?acctById(l.accountId):null;
+  const selCls=sel?classOf(sel):"";
+  const open=UI.acctPickOpen===i;
   return `<div class="line" data-i="${i}">
-    <div class="acctcell"><button class="iconbtn addnew" data-action="leg-new-acct" data-i="${i}" data-tip="Create a new account for this leg" aria-label="New account">${I.plus}</button><select data-line="acct" data-i="${i}">${acctOptions(l.accountId,used)}</select></div>
+    <div class="acctcell"><button class="iconbtn addnew" data-action="leg-new-acct" data-i="${i}" data-tip="Create a new account for this leg" aria-label="New account">${I.plus}</button>
+      <div class="acctpick${open?" open":""}" data-i="${i}">
+        <input type="hidden" data-line="acct" data-i="${i}" value="${escAttr(l.accountId||"")}">
+        <button type="button" class="acctpick-btn${sel?"":" ph"}${selCls?" cls-"+selCls:""}" data-action="acct-open" data-i="${i}" aria-haspopup="listbox" aria-expanded="${open}">
+          <span class="acctpick-dot"></span><span class="acctpick-val">${sel?esc(sel.name):"— account —"}</span><span class="acctpick-chev">${I.chev}</span>
+        </button>
+        ${open?acctPickPanel(i,l.accountId,used):""}
+      </div></div>
     <input type="number" step="0.01" data-line="debit" data-i="${i}" value="${l.debit||""}" placeholder="0.00">
     <input type="number" step="0.01" data-line="credit" data-i="${i}" value="${l.credit||""}" placeholder="0.00">
     <button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>
+  </div>`;
+}
+// custom color-coded account picker panel (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts)
+function acctPickPanel(i,selId,exclude){
+  const q=(UI.acctPickFilter||"").trim().toLowerCase();
+  let body="";
+  for(const [ck,cl] of CLASSES){
+    typesInClass(ck).slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
+      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name))
+        .filter(a=>!(exclude&&exclude.has(a.id)&&a.id!==selId))
+        .filter(a=>!q||a.name.toLowerCase().includes(q)||cl.toLowerCase().includes(q)||t.name.toLowerCase().includes(q));
+      if(!accts.length) return;
+      body+=`<div class="acctopt-group"><div class="acctopt-head cls-${ck}">${esc(cl)} · ${esc(t.name)}</div>`;
+      accts.forEach(a=>{ body+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}">${esc(a.name)}</button>`; });
+      body+=`</div>`;
+    });
+  }
+  if(!body) body=`<div class="acctopt-empty">No accounts match “${esc(q)}”.</div>`;
+  return `<div class="acctpanel" id="acctpanel-${i}" role="listbox">
+    <div class="acctpanel-search"><input type="text" id="acctfilter" placeholder="Search accounts…" autocomplete="off" value="${escAttr(UI.acctPickFilter||"")}"></div>
+    <div class="acctpanel-list" id="acctpanel-list-${i}">${body}${selId?`<button type="button" class="acctopt acctopt-clear" data-action="acct-choose" data-i="${i}" data-id="">— clear —</button>`:""}</div>
   </div>`;
 }
 function syncLines(){
@@ -1726,8 +1784,10 @@ document.addEventListener("click",e=>{
     case "conflict-reload": location.reload(); break;
     case "conflict-overwrite": if(STORE&&S) STORE.save(S,"force"); dismissModal(); break;
     case "save-acct": saveAcct(); break;
-    case "add-line": syncLines(); UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
-    case "rm-line": syncLines(); UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
+    case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
+    case "acct-choose": { const i=+el.dataset.i; syncLines(); UI.modal.draft.lines[i].accountId=el.dataset.id||""; UI.acctPickOpen=null; UI.acctPickFilter=""; renderModal(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); const de=document.getElementById("tx-date"); if(de) de.value=UI.modal.draft.date; break; }
     case "save-tx": saveTx(); break;
     case "del-tx-modal": { const did=UI.modal.id; dismissModal(); softDeleteTx(did); break; }
@@ -1737,9 +1797,42 @@ document.addEventListener("keydown",e=>{
   if((e.key==="Enter"||e.key===" ")&&e.target&&e.target.closest&&e.target.closest('[data-action="go-home"]')){ e.preventDefault(); goHash("#/"+(UI.homeView||"accounts")); return; }   // logo → homepage
   if(UI.sub){ if(e.key==="Escape"){ UI.sub=null; renderModal(); } else if(e.key==="Enter"){ e.preventDefault(); subCreate(); } return; }   // sub-modal takes keys first
   if(!UI.modal) return;
+  if(e.key==="Escape" && UI.acctPickOpen!=null){ closeAcctPanel(); return; }   // Esc closes an open account picker first, not the whole modal
   if(e.key==="Escape"){ dismissModal(); return; }
   if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; dismissModal(fn); }
 });
+// ---- custom account picker: positioning, live filter, and dismissal ----
+function positionAcctPanel(i){
+  const pick=document.querySelector(`.acctpick[data-i="${i}"]`); if(!pick) return;
+  const btn=pick.querySelector(".acctpick-btn"), panel=pick.querySelector(".acctpanel"); if(!btn||!panel) return;
+  const r=btn.getBoundingClientRect();
+  panel.style.width=Math.max(r.width,240)+"px";
+  const ph=panel.offsetHeight, vh=window.innerHeight, vw=window.innerWidth;
+  panel.style.top=(vh-r.bottom < ph+8 && r.top > ph+8) ? (r.top-ph-4)+"px" : (r.bottom+4)+"px"; // flip up if no room below
+  let left=r.left; const pw=panel.offsetWidth; if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+  panel.style.left=left+"px";
+}
+function closeAcctPanel(){ // lightweight close (no full re-render) so a click that lands elsewhere still works
+  UI.acctPickOpen=null; UI.acctPickFilter="";
+  const p=document.querySelector(".acctpanel"); if(p) p.remove();
+  document.querySelectorAll(".acctpick.open").forEach(el=>{ el.classList.remove("open"); const b=el.querySelector(".acctpick-btn"); if(b) b.setAttribute("aria-expanded","false"); });
+}
+document.addEventListener("mousedown",e=>{ if(UI.acctPickOpen==null) return; if(e.target.closest(".acctpick")) return; closeAcctPanel(); },true); // click outside closes
+document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter WITHOUT re-render, so the field keeps focus
+  UI.acctPickFilter=f.value; const i=UI.acctPickOpen; if(i==null) return;
+  const list=document.getElementById("acctpanel-list-"+i); if(!list) return;
+  const q=f.value.trim().toLowerCase();
+  list.querySelectorAll(".acctopt-group").forEach(g=>{
+    const head=g.querySelector(".acctopt-head"); const headHit=!!head && head.textContent.toLowerCase().includes(q);
+    let any=false;
+    g.querySelectorAll(".acctopt").forEach(o=>{ const show=!q||headHit||o.textContent.toLowerCase().includes(q); o.style.display=show?"":"none"; if(show) any=true; });
+    g.style.display=any?"":"none";
+  });
+  let visible=[...list.querySelectorAll(".acctopt-group")].some(g=>g.style.display!=="none");
+  let emp=list.querySelector(".acctopt-empty"); if(!visible && !emp){ emp=document.createElement("div"); emp.className="acctopt-empty"; list.appendChild(emp); } if(emp) emp.style.display=visible?"none":"", emp&&(emp.textContent=`No accounts match “${f.value.trim()}”.`);
+  positionAcctPanel(i);
+});
+window.addEventListener("resize",()=>{ if(UI.acctPickOpen!=null) closeAcctPanel(); });
 // clear the red 'invalid' highlight as soon as a flagged field gets a value
 ["input","change"].forEach(ev=>document.addEventListener(ev,e=>{ const t=e.target; if(t&&t.classList&&t.classList.contains("invalid")&&String(t.value||"").trim()) t.classList.remove("invalid"); }));
 // instant hover tooltip for [data-tip] elements (native title has an uncontrollable ~1s delay)
