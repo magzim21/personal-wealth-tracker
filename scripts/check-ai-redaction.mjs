@@ -1,9 +1,11 @@
-// CI guard for the AI feature's promise: NUMBERS ARE NEVER SENT to the model.
+// CI guard for the AI feature's promise: your LEDGER'S NUMBERS ARE NEVER SENT (balances, amounts,
+// rates, account ids). Numbers the USER types into the request box are theirs and may be sent.
 // This locks the two hard gates in place so a future edit can't quietly weaken them:
 //   (A) whitelist — accounts are referenced by letter tokens, never their numeric ids;
-//   (B) choke-point — every model-facing byte (messages + schema) passes one digit gate before fetch.
+//   (B) choke-point — the LEDGER-DERIVED payload (system messages + schema) passes one digit gate
+//       before fetch; the gate must EXCLUDE the user's own message.
 // It also runs the real scrubDigits() from index.html against digit-laden input and
-// fails if a single 0-9 survives.
+// fails if a single 0-9 survives (scrubDigits guards account names, which are ledger-derived).
 import { readFileSync } from "node:fs";
 
 const html = readFileSync("index.html", "utf8");
@@ -13,11 +15,15 @@ const fail = (m) => { console.error("FAIL:", m); process.exit(1); };
 const sends = (html.match(/openrouter\.ai\/api\/v1\/chat\/completions/g) || []).length;
 if (sends !== 1) fail(`expected exactly one OpenRouter chat endpoint (the choke-point), found ${sends}`);
 
-// (B) the digit gate must sit in orChat, guarding the model-facing payload, and throw/block.
-if (!/const\s+modelFacing\s*=\s*JSON\.stringify\(\{\s*messages\s*,\s*response_format\s*:\s*schema\s*\}\)/.test(html))
-  fail("orChat must serialize {messages, response_format} into `modelFacing`");
-if (!/if\s*\(\s*\/\[0-9\]\/\.test\(modelFacing\)\s*\)\s*throw/.test(html))
-  fail("orChat must throw when a digit reaches `modelFacing` (the redaction gate)");
+// (B) the digit gate must sit in orChat, guard the LEDGER-DERIVED payload, and EXCLUDE the user
+// message (role !== "user") — so a ledger digit is blocked but the user's own numbers pass.
+if (!/const\s+ledgerDerived\s*=\s*JSON\.stringify\(\{\s*sys\s*:\s*messages\.filter\(\s*m\s*=>\s*m\.role\s*!==\s*["']user["']\s*\)[\s\S]*?schema\s*\}\)/.test(html))
+  fail("orChat must build `ledgerDerived` from the NON-user messages (m.role !== 'user') plus the schema");
+if (!/if\s*\(\s*\/\[0-9\]\/\.test\(ledgerDerived\)\s*\)\s*throw/.test(html))
+  fail("orChat must throw when a digit reaches `ledgerDerived` (the redaction gate)");
+// the system message that carries the account catalog must still be digit-scrubbed.
+if (!/role\s*:\s*["']system["']\s*,\s*content\s*:\s*scrubDigits\(/.test(html))
+  fail("the system/catalog message must be wrapped in scrubDigits()");
 
 // (A) accounts must be tokenised to letters (no id leaks); orBuildAccounts must not emit balances.
 if (!/function\s+orLetters\(/.test(html)) fail("orLetters() (letter-token references) missing");

@@ -398,11 +398,12 @@ table.register thead th{background:var(--surface-2)}
 .modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .lines{display:flex;flex-direction:column;gap:8px}
-.linehead,.line{display:grid;grid-template-columns:1fr 96px 96px 28px;gap:8px;align-items:center}
+.linehead,.line{display:grid;grid-template-columns:1fr 96px 96px 20px;gap:8px;align-items:center}
 .linehead{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
 .linehead .r{text-align:right}
 .aibar{display:flex;gap:8px;align-items:center}
 .aibar input{flex:1;min-width:0}
+.aifield{border-top:1px solid var(--line);padding-top:13px;margin-top:2px}
 /* ==== custom, colour-coded account picker (replaces the native <select> — long chart of accounts,
    keyed to class colour like the Accounts view; panel is position:fixed so the modal's overflow can't clip it) ==== */
 .acctpick{position:relative;flex:1;min-width:0}
@@ -423,8 +424,10 @@ table.register thead th{background:var(--surface-2)}
 .acctpanel-search{padding:8px;border-bottom:1px solid var(--line)}
 .acctpanel-search input{width:100%}
 .acctpanel-list{overflow:auto;padding:3px 0}
-.acctopt-head{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--faint));padding:6px 12px 2px;border-left:3px solid var(--c,transparent);margin-top:1px}
-.acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+/* 3-level indent: class (0) › type (1) › account (2), each keyed to the class colour */
+.acctopt-class{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--faint));padding:7px 12px 2px 12px;border-left:3px solid var(--c,transparent);margin-top:2px}
+.acctopt-type{font-size:11.5px;font-weight:600;color:var(--muted);padding:3px 12px 2px 24px;border-left:3px solid var(--c,transparent)}
+.acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px 5px 36px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .acctopt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acctopt-amt{flex:none;font-family:var(--fs-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .acctopt:hover{background:var(--surface-2)}
@@ -445,11 +448,11 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .aiprop-txt .cls{font-weight:700}
 .aiprop-txt .grp{font-weight:500}
 .aiprop-txt .sep{color:var(--faint)}
-.acctcell{display:flex;gap:5px;align-items:center;min-width:0}
+.acctcell{display:flex;gap:2px;align-items:center;min-width:0}
 .acctcell select{flex:1;min-width:0}
-.iconbtn.addnew{flex:none;color:var(--accent);padding:3px;width:26px;height:26px}
+.iconbtn.addnew{flex:none;color:var(--accent);padding:0;width:18px;height:26px}
 .iconbtn.addnew svg{width:15px;height:15px}
-/* remove-line ×: centered in its track and sitting close to the credit field (no stray left padding) */
+/* remove-line ×: fills a slim track, hugging the credit field with no wasted gutter */
 .line .rmline{justify-self:center;padding:6px 0;width:100%}
 .propclass,.propgroup{padding:2px 6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink)}
 .propgroupname{padding:2px 7px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink);min-width:110px;max-width:170px}
@@ -982,7 +985,7 @@ function viewAbout(){
         <ul class="lp-seclist">
           <li><b>Local-first, loopback-only.</b> Your books are one JSON file on your machine. The local server listens on <code>127.0.0.1</code> only, so nothing off your computer can reach it.</li>
           <li><b>No account, no cloud, no telemetry.</b> The only traffic that ever leaves is what you trigger: an exchange-rate lookup, or an AI draft.</li>
-          <li><b>AI drafting never sends numbers.</b> Amounts become <code>‹num›</code>, accounts are referred to by letters (A, B, C…) never their ids, and a hard check blocks the request if a single digit survives. Your OpenRouter key is minted by a browser-only OAuth flow and stays in your browser — it is never typed in or pasted anywhere it could leak.</li>
+          <li><b>AI drafting never sends your ledger's numbers.</b> Your balances, amounts, rates and account ids never leave — accounts are referred to by letters (A, B, C…), their names are digit-scrubbed, and a hard check blocks the request if a digit reaches that ledger-derived content. Only your own words are sent as you wrote them, so numbers you type into the request (like a price for context) go through. Your OpenRouter key is minted by a browser-only OAuth flow and stays in your browser.</li>
           <li><b>Your data can’t be silently corrupted.</b> Every file carries a schema version — a file written by a newer version is refused, not overwritten — and an ETag guard means a stale tab can never clobber a fresher save. A timestamped snapshot is written on every change, so you can always roll back.</li>
           <li><b>Nothing hidden on disk.</b> Config and snapshots live in a project-local folder you can see, never in system directories.</li>
           <li><b>Browser hardened.</b> The page turns off spellcheck (so Chrome can’t send field text to Google for “enhanced” checking), marks itself non-translatable, and sends no referrer on outbound requests.</li>
@@ -1476,7 +1479,7 @@ function renderModal(){
           <p class="muted" style="font-size:12px;margin:8px 0 0">Only currency codes / a country code leave your machine — never balances, amounts or names.</p>
         </div>
         <div>
-          <div style="${eb}">AI drafting (OpenRouter) <span class="infodot" data-tip="Only «Draft legs» sends anything, to OpenRouter with your key: your words and your account NAMES (every number stripped first). Account ids, amounts, balances and rates never leave — a hard check blocks the request on any digit.&#10;Privacy tip: the names ARE sent, so for more anonymity avoid identifying ones — e.g. «Frank's car» or «blue car», not the make and year.">&#9432;</span></div>
+          <div style="${eb}">AI drafting (OpenRouter) <span class="infodot" data-tip="Only «Draft legs» sends anything, to OpenRouter with your key: your own words plus your account NAMES (their digits scrubbed). Account ids, amounts, balances and rates never leave — a hard check blocks the request if a digit reaches that ledger-derived content. Numbers YOU type into the request are sent as-is.&#10;Privacy tip: the names ARE sent, so for more anonymity avoid identifying ones — e.g. «Frank's car» or «blue car», not the make and year.">&#9432;</span></div>
           ${orConnected()
             ? `<div class="airow"><span class="okdot">●</span> Connected<div style="flex:1"></div><button class="btn sm" data-action="or-disconnect">Disconnect</button></div>
                <label class="field" style="margin-top:8px"><span>Model <span class="infodot" data-tip="Which OpenRouter model drafts the legs. A stronger model follows the account-picking rules more reliably; gpt-4o-mini is the cheapest. Pick «Other…» to type any model id.">&#9432;</span></span>
@@ -1556,9 +1559,6 @@ go run server.go          # Go</pre>
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>${UI.modal.id?"Edit transaction":"New transaction"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        ${orConnected()
-          ? `<label class="field"><span>✨ Draft with AI <span style="font-weight:400;color:var(--faint)">— optional; plain words become the two legs below</span></span><div class="aibar"><input type="text" id="ai-desc" placeholder="e.g. paid rent from checking" value="${escAttr(UI.modal.aiText||"")}"><button class="btn sm primary" data-action="ai-draft" id="ai-draft" data-tip="Sends your words + account names, every number stripped first. Picks the legs only — you enter the amount.">✨ Draft legs</button></div></label>`
-          : `<div class="aibar"><button class="btn sm" data-action="or-connect" style="width:100%" data-tip="Browser-only sign-in that makes your own OpenRouter key, kept in this browser. Nothing sends until «Draft legs», numbers always stripped.">✨ Connect OpenRouter to draft entries with AI</button></div>`}
         <div class="grid2">
           <label class="field"><span>Accounting date <span class="infodot" data-tip="The day this actually happened — not when you typed it in. This is the date your books use for it.">&#9432;</span></span><div class="datewrap"><input type="date" id="tx-date" value="${d.date}"><button type="button" class="btn xs" data-action="tx-today" title="Set to today">Today</button></div></label>
           <label class="field"><span>Description</span><input type="text" id="tx-desc" value="${escAttr(d.description)}" placeholder="e.g. Cash sale"></label>
@@ -1571,6 +1571,9 @@ go run server.go          # Go</pre>
         <div class="balrow" id="balrow"></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="tx-comment" rows="2" placeholder="Notes about this entry">${esc(d.comment||"")}</textarea></label>
         ${UI.modal.id&&d.createdAt?`<div class="muted" style="font-size:11.5px;margin-top:-2px">Entered ${esc(fmtCreated(d.createdAt))}</div>`:""}
+        ${orConnected()
+          ? `<label class="field aifield"><span>✨ Draft with AI <span style="font-weight:400;color:var(--faint)">— optional; plain words become the two legs above</span></span><div class="aibar"><input type="text" id="ai-desc" placeholder="e.g. paid rent from checking" value="${escAttr(UI.modal.aiText||"")}"><button class="btn sm primary" data-action="ai-draft" id="ai-draft" data-tip="Sends your words + account names. Picks the legs only — you enter the amounts. Your account balances, ids and rates never leave.">✨ Draft legs</button></div></label>`
+          : `<div class="aibar aifield"><button class="btn sm" data-action="or-connect" style="width:100%" data-tip="Browser-only sign-in that makes your own OpenRouter key, kept in this browser. Nothing sends until «Draft legs».">✨ Connect OpenRouter to draft entries with AI</button></div>`}
       </div>
       <div class="modal-f">${UI.modal.id?`<button class="btn" data-action="del-tx-modal" style="color:var(--neg)">${I.trash}Delete</button>`:""}<div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-tx" id="save-tx">Save</button></div>
     </div></div>`;
@@ -1657,26 +1660,32 @@ function lineRow(l,i){
     <button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>
   </div>`;
 }
-// custom color-coded account picker panel (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts)
-function acctPickPanel(i,selId,exclude){
-  const q=(UI.acctPickFilter||"").trim().toLowerCase();
+// custom colour-coded account picker (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts).
+// The list is a 3-level indent — class › type › account — for at-a-glance hierarchy.
+function acctPickListBody(i,selId,exclude,rawq){
+  const q=(rawq||"").trim().toLowerCase();
   let body="";
   for(const [ck,cl] of CLASSES){
+    let inner="";
     typesInClass(ck).slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
       const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name))
         .filter(a=>!(exclude&&exclude.has(a.id)&&a.id!==selId))
         .filter(a=>!q||a.name.toLowerCase().includes(q)||cl.toLowerCase().includes(q)||t.name.toLowerCase().includes(q));
       if(!accts.length) return;
-      body+=`<div class="acctopt-group"><div class="acctopt-head cls-${ck}">${esc(cl)} · ${esc(t.name)}</div>`;
+      inner+=`<div class="acctopt-type cls-${ck}">${esc(t.name)}</div>`;
       accts.forEach(a=>{ const bal=money(toBase(balance(a.id),accCur(a)));
-        body+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}"><span class="acctopt-name">${esc(a.name)}</span><span class="acctopt-amt num">${bal}</span></button>`; });
-      body+=`</div>`;
+        inner+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}"><span class="acctopt-name">${esc(a.name)}</span><span class="acctopt-amt num">${bal}</span></button>`; });
     });
+    if(inner) body+=`<div class="acctopt-class cls-${ck}">${esc(cl)}</div>${inner}`;
   }
   if(!body) body=`<div class="acctopt-empty">No accounts match “${esc(q)}”.</div>`;
+  if(selId) body+=`<button type="button" class="acctopt acctopt-clear" data-action="acct-choose" data-i="${i}" data-id="">— clear —</button>`;
+  return body;
+}
+function acctPickPanel(i,selId,exclude){
   return `<div class="acctpanel" id="acctpanel-${i}" role="listbox">
     <div class="acctpanel-search"><input type="text" id="acctfilter" placeholder="Search accounts…" autocomplete="off" value="${escAttr(UI.acctPickFilter||"")}"></div>
-    <div class="acctpanel-list" id="acctpanel-list-${i}">${body}${selId?`<button type="button" class="acctopt acctopt-clear" data-action="acct-choose" data-i="${i}" data-id="">— clear —</button>`:""}</div>
+    <div class="acctpanel-list" id="acctpanel-list-${i}">${acctPickListBody(i,selId,exclude,UI.acctPickFilter)}</div>
   </div>`;
 }
 function syncLines(){
@@ -1824,18 +1833,12 @@ function closeAcctPanel(){ // lightweight close (no full re-render) so a click t
   document.querySelectorAll(".acctpick.open").forEach(el=>{ el.classList.remove("open"); const b=el.querySelector(".acctpick-btn"); if(b) b.setAttribute("aria-expanded","false"); });
 }
 document.addEventListener("mousedown",e=>{ if(UI.acctPickOpen==null) return; if(e.target.closest(".acctpick")) return; closeAcctPanel(); },true); // click outside closes
-document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter WITHOUT re-render, so the field keeps focus
+document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter: rebuild only the list body (search input untouched, so it keeps focus)
   UI.acctPickFilter=f.value; const i=UI.acctPickOpen; if(i==null) return;
   const list=document.getElementById("acctpanel-list-"+i); if(!list) return;
-  const q=f.value.trim().toLowerCase();
-  list.querySelectorAll(".acctopt-group").forEach(g=>{
-    const head=g.querySelector(".acctopt-head"); const headHit=!!head && head.textContent.toLowerCase().includes(q);
-    let any=false;
-    g.querySelectorAll(".acctopt").forEach(o=>{ const show=!q||headHit||o.textContent.toLowerCase().includes(q); o.style.display=show?"":"none"; if(show) any=true; });
-    g.style.display=any?"":"none";
-  });
-  let visible=[...list.querySelectorAll(".acctopt-group")].some(g=>g.style.display!=="none");
-  let emp=list.querySelector(".acctopt-empty"); if(!visible && !emp){ emp=document.createElement("div"); emp.className="acctopt-empty"; list.appendChild(emp); } if(emp) emp.style.display=visible?"none":"", emp&&(emp.textContent=`No accounts match “${f.value.trim()}”.`);
+  const d=UI.modal&&UI.modal.draft; if(!d) return; const L=d.lines[i]; if(!L) return;
+  const exclude=new Set(d.lines.map((x,j)=>j!==i?x.accountId:"").filter(Boolean));
+  list.innerHTML=acctPickListBody(i,L.accountId,exclude,f.value);
   positionAcctPanel(i);
 });
 window.addEventListener("resize",()=>{ if(UI.acctPickOpen!=null) closeAcctPanel(); });
@@ -2181,15 +2184,17 @@ function renderSchemaBlock(fileVer){
    You bring your OWN key: a browser-only OAuth flow (no backend, no copy-paste) mints a
    per-user key that lives in this browser's localStorage and nowhere else.
 
-   NUMBERS ARE NEVER SENT. There is no toggle. Two hard gates guarantee it:
-     (A) Whitelist — the request is assembled field-by-field from account NAMES/types only;
+   NOTHING DERIVED FROM YOUR LEDGER'S NUMBERS IS EVER SENT — no balance, amount, rate or id.
+   Two hard gates guarantee it:
+     (A) Whitelist — the account catalog is assembled field-by-field from NAMES/types only;
          amounts, balances and rates are never read into it. Accounts are referenced by
          letter tokens (A, B, C…), never their ids, so even the plumbing carries no digit.
-     (B) Choke-point — every model-facing byte (messages AND the response schema) passes
-         through orChat(), which stringifies it and REFUSES to send if a single 0-9 survived.
-   Free text is digit-scrubbed by scrubDigits() before it can reach the wire. (The `model`
-   id, e.g. "openai/gpt-4o-mini", is routing metadata — not content the model reads — so it
-   is deliberately outside the digit gate; nothing derived from your ledger ever is.) ======= */
+     (B) Choke-point — orChat() stringifies the LEDGER-DERIVED content (the system message +
+         the response schema) and REFUSES to send if a single 0-9 survived. Account NAMES are
+         digit-scrubbed by scrubDigits() before they reach it.
+   The one thing exempt from the gate is the USER's own message: numbers you type into the
+   request box are yours to send (e.g. "$500 rent" for context) — they are never read from the
+   ledger. (The `model` id is routing metadata, also outside the gate.) ======= */
 const OR_KEY="ledgerbook.openrouter.key", OR_VERIFIER="ledgerbook.openrouter.verifier", OR_MODEL="ledgerbook.openrouter.model";
 const OR_DEFAULT_MODEL="openai/gpt-4o-mini";
 // A short curated list of OpenRouter model ids; "Other…" lets you type any id the list doesn't cover.
@@ -2251,10 +2256,15 @@ function orBuildAccounts(){
 }
 
 // Gate B: the single choke-point. Nothing reaches OpenRouter except through here.
+// The digit gate applies to LEDGER-DERIVED content only — the system message (account catalog,
+// instructions) and the response schema. That content is assembled from a name/type whitelist
+// (Gate A) and must never carry a digit, which is what guarantees balances, account ids and rates
+// can't leak. The USER's own message is exempt: numbers they type into the request are theirs to
+// send (e.g. an amount for context) and are never derived from the ledger.
 async function orChat(messages, schema){
   const key=orGetKey(); if(!key) throw new Error("Connect OpenRouter first.");
-  const modelFacing=JSON.stringify({messages, response_format:schema});
-  if(/[0-9]/.test(modelFacing)) throw new Error("Redaction gate: a digit reached the outbound payload — request blocked, nothing was sent.");
+  const ledgerDerived=JSON.stringify({sys:messages.filter(m=>m.role!=="user").map(m=>m.content), schema});
+  if(/[0-9]/.test(ledgerDerived)) throw new Error("Redaction gate: a digit reached ledger-derived content — request blocked, nothing was sent.");
   const r=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",
     headers:{"authorization":"Bearer "+key,"content-type":"application/json","HTTP-Referer":location.origin,"X-Title":"Ledgerbook"},
     body:JSON.stringify({model:orModel(), messages, response_format:schema, temperature:0})});
@@ -2292,8 +2302,8 @@ async function orDraftTx(userText){
     "For a purchase, the credit is the source of funds — the cash/bank account paid from, or the loan/payable used; a brand-new loan with no matching account is a newAccount of class liability.\n"+
     "This is a balance-sheet ledger — classes are asset, liability, equity only (income like salary increases equity; expenses decrease it). Never output any number or amount.\nAccounts (ref — name (group, class, currency)):\n"+catalog;
   const messages=[
-    {role:"system",content:scrubDigits(sys)},
-    {role:"user",content:scrubDigits(userText)}
+    {role:"system",content:scrubDigits(sys)},   // ledger-derived: stays digit-free (Gate B enforces it)
+    {role:"user",content:userText}               // the user's own words — numbers they typed are allowed through
   ];
   const raw=await orChat(messages, schema);
   let obj; try{ obj=JSON.parse(raw); }catch(_){ throw new Error("The model didn't return valid JSON."); }
