@@ -405,6 +405,7 @@ table.register thead th{background:var(--surface-2)}
 .aibar{display:flex;gap:8px;align-items:center}
 .aibar input{flex:1;min-width:0}
 .aifield{border-top:1px solid var(--line);padding-top:13px;margin-top:2px}
+.betatag{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px;vertical-align:middle;margin-left:4px}
 /* ==== custom, colour-coded account picker (replaces the native <select> — long chart of accounts,
    keyed to class colour like the Accounts view; panel is position:fixed so the modal's overflow can't clip it) ==== */
 .acctpick{position:relative;flex:1;min-width:0}
@@ -1460,6 +1461,13 @@ function renderModal(){
       <div class="modal-h"><h3>Settings</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <div>
+          <div style="${eb}">Accounting mode <span class="betatag">beta</span></div>
+          <div class="sfield"><span>Books style <span class="infodot" data-tip="Personal is the default. Business (beta) tunes wording and examples for business books; deeper business features (income/expense, invoices) are coming.">&#9432;</span></span>
+            <div class="themeseg" role="group" aria-label="Accounting mode">${[["personal","Personal"],["business","Business"]].map(([k,l])=>`<button class="${((S.settings.accountingMode||"personal")===k)?"on":""}" data-action="set-acctmode" data-mode="${k}">${l}</button>`).join("")}</div>
+          </div>
+          <p class="muted" style="font-size:12px;margin:6px 0 0">Business mode is experimental — for now it only adjusts examples/wording. Your data is identical either way.</p>
+        </div>
+        <div>
           <div style="${eb}">Appearance</div>
           <div class="sfield"><span>Theme</span>
             <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
@@ -1759,6 +1767,7 @@ document.addEventListener("click",e=>{
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
     case "set-palette": S.settings.palette=el.dataset.pal; applyPalette(); save(); render(); renderModal(); break;
     case "set-density": S.settings.density=el.dataset.density; save(); render(); renderModal(); break;
+    case "set-acctmode": S.settings.accountingMode=el.dataset.mode; save(); render(); renderModal(); break;
     case "toggle-type": {
       const on=!UI.collapsed[id]; UI.collapsed[id]=on; saveUIPrefs();
       const head=el.closest(".typehead");
