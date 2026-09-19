@@ -422,12 +422,15 @@ table.register thead th{background:var(--surface-2)}
 .acctpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);width:280px;max-height:340px;display:flex;flex-direction:column;overflow:hidden}
 .acctpanel-search{padding:8px;border-bottom:1px solid var(--line)}
 .acctpanel-search input{width:100%}
-.acctpanel-list{overflow:auto;padding:4px 0}
-.acctopt-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--faint));padding:7px 12px 3px;border-left:3px solid var(--c,transparent);margin-top:2px}
-.acctopt{display:flex;align-items:center;width:100%;text-align:left;padding:7px 12px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;color:var(--ink);cursor:pointer}
+.acctpanel-list{overflow:auto;padding:3px 0}
+.acctopt-head{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--faint));padding:6px 12px 2px;border-left:3px solid var(--c,transparent);margin-top:1px}
+.acctopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 12px;border:0;border-left:3px solid var(--c,var(--line-strong));background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.acctopt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acctopt-amt{flex:none;font-family:var(--fs-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .acctopt:hover{background:var(--surface-2)}
-.acctopt.sel{background:var(--accent-soft);font-weight:600}
-.acctopt-clear{--c:var(--line-strong);color:var(--muted);border-top:1px solid var(--line);margin-top:4px}
+.acctopt.sel{background:var(--accent-soft)}
+.acctopt.sel .acctopt-name{font-weight:600}
+.acctopt-clear{--c:var(--line-strong);color:var(--muted);border-top:1px solid var(--line);margin-top:3px}
 .acctopt-empty{padding:14px 12px;color:var(--muted);font-size:13px;text-align:center}
 #tip{position:fixed;z-index:9999;max-width:300px;padding:9px 11px;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:8px;font-size:12px;line-height:1.45;white-space:pre-line;box-shadow:var(--shadow-lift);pointer-events:none;opacity:0;transition:opacity .08s ease}
 #tip.on{opacity:1}
@@ -453,11 +456,14 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .propname{padding:2px 7px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:12.5px;background:var(--surface);color:var(--ink);min-width:130px;max-width:220px}
 .propname.invalid{border-color:var(--neg);box-shadow:0 0 0 3px color-mix(in srgb,var(--neg) 18%,transparent)}
 .line.propose{display:block}
-.balrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r-sm);font-size:13px;background:var(--surface-2)}
-.balrow.ok{background:var(--accent-soft);color:var(--accent-ink)}
-.balrow.bad{background:#f7e7e6;color:var(--neg)}
-:root[data-theme="dark"] .balrow.bad{background:#33201f}
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .balrow.bad{background:#33201f} }
+/* Balance row: eases open instead of popping, and stays calm while you're mid-entry —
+   neutral background with a soft amber "off by", green only once it actually balances. */
+.balrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r-sm);font-size:13px;background:var(--surface-2);overflow:hidden;max-height:60px;transition:max-height .22s ease,opacity .2s ease,padding .22s ease,margin-top .22s ease}
+.balrow.hidden{max-height:0;opacity:0;padding-top:0;padding-bottom:0;margin-top:-14px}
+.balrow.ok{background:var(--accent-soft)}
+.balrow .balverdict{font-weight:600;color:var(--muted)}
+.balrow.ok .balverdict{color:var(--accent-ink)}
+.balrow.bad .balverdict{color:#b0741a}
 
 @media (max-width:640px){
   .app{grid-template-columns:1fr}
@@ -1662,7 +1668,8 @@ function acctPickPanel(i,selId,exclude){
         .filter(a=>!q||a.name.toLowerCase().includes(q)||cl.toLowerCase().includes(q)||t.name.toLowerCase().includes(q));
       if(!accts.length) return;
       body+=`<div class="acctopt-group"><div class="acctopt-head cls-${ck}">${esc(cl)} · ${esc(t.name)}</div>`;
-      accts.forEach(a=>{ body+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}">${esc(a.name)}</button>`; });
+      accts.forEach(a=>{ const bal=money(toBase(balance(a.id),accCur(a)));
+        body+=`<button type="button" role="option" class="acctopt cls-${ck}${a.id===selId?" sel":""}" data-action="acct-choose" data-i="${i}" data-id="${a.id}"><span class="acctopt-name">${esc(a.name)}</span><span class="acctopt-amt num">${bal}</span></button>`; });
       body+=`</div>`;
     });
   }
@@ -1694,10 +1701,9 @@ function updateBal(){
   const tol=Math.max(0.01,0.005*Math.max(dr,cr)); // absorb cross-currency rate rounding
   const ok=Math.abs(diff)<=tol && dr>0;
   const row=document.getElementById("balrow");
-  const pristine=!dr && !cr;   // nothing entered yet — don't show a balance verdict on an untouched form
-  row.style.display=pristine?"none":"";
-  row.className="balrow "+(ok?"ok":(dr||cr?"bad":""));
-  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span>${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span>`;
+  const pristine=!dr && !cr;   // nothing entered yet — keep the row collapsed (it eases open once you type)
+  row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""));
+  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span class="balverdict">${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span>`;
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
 
