@@ -1595,10 +1595,7 @@ function renderModal(){
           <label class="sfield"><span>Time zone <span class="infodot" data-tip="Decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
             <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
           </label>
-          <label class="sfield"><span>Vehicle (pivot) currency <span class="infodot" data-tip="Only used to convert between two currencies that aren't it: the amount hops through the vehicle (e.g. UAH→USD→ILS), so no direct UAH/ILS rate is needed. If one side already is the vehicle, there's no hop. USD is the default because most rates are quoted against it.&#10;&#10;Changing it is NOT retrospective: existing entries keep the pivot and frozen rates they were booked with, so their balance and value never move. Only NEW entries use the new pivot.">&#9432;</span></span>
-            ${curField("vehicle-pick",vehicle())}
-          </label>
-          <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”. The vehicle is only the pivot rates hang off — your display currency can be anything.</p>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”.</p>
         </div>
         <div>
           <div style="${eb}">Right sidebar <span class="infodot" data-tip="Quiet extra panels in the space to the right of the page on wide screens (≥1280px). They fetch public data over the internet, but your ledger is never sent.">&#9432;</span></div>
@@ -1651,6 +1648,13 @@ function renderModal(){
             <li><b>Usage stats & Sync</b> → don’t sign in / disable Sync, and turn off “Help improve Chrome”.</li>
           </ul>
           <p class="muted" style="font-size:12px;margin:8px 0 0">For maximum isolation, run this app in a browser without Google services (ungoogled-chromium or Firefox).</p>
+        </div>
+        <div>
+          <div style="${eb}">Advanced</div>
+          <label class="sfield"><span>Vehicle (pivot) currency <span class="infodot" data-tip="Rarely needs changing — leave it on USD. Used only in cross-currency transactions: to convert between two currencies that aren't it, the amount hops through the vehicle. Example: a UAH↔ILS transaction goes UAH→USD→ILS. Not retrospective — only new entries use a changed pivot.">&#9432;</span></span>
+            ${curField("vehicle-pick",vehicle())}
+          </label>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">The pivot that exchange rates hang off. Most people never touch this.</p>
         </div>
         <div>
           <div style="${eb}">Experimental <span class="betatag">beta</span></div>
