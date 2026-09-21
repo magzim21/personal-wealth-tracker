@@ -1596,7 +1596,7 @@ function renderModal(){
             <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
           </label>
           <label class="sfield"><span>Vehicle (pivot) currency <span class="infodot" data-tip="Only used to convert between two currencies that aren't it: the amount hops through the vehicle (e.g. UAH→USD→ILS), so no direct UAH/ILS rate is needed. If one side already is the vehicle, there's no hop. USD is the default because most rates are quoted against it.&#10;&#10;Changing it is NOT retrospective: existing entries keep the pivot and frozen rates they were booked with, so their balance and value never move. Only NEW entries use the new pivot.">&#9432;</span></span>
-            <select id="vehicle-pick">${VEHICLES.map(c=>`<option value="${c}" ${vehicle()===c?"selected":""}>${esc(c)} · ${esc(CUR_NAMES[c]||"")}</option>`).join("")}</select>
+            ${curField("vehicle-pick",vehicle())}
           </label>
           <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”. The vehicle is only the pivot rates hang off — your display currency can be anything.</p>
         </div>
