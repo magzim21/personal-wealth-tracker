@@ -423,8 +423,8 @@ table.register thead th{background:var(--surface-2)}
 .privbtn{display:inline-flex;align-items:center;gap:6px}
 .privbtn svg{width:15px;height:15px}
 .privbtn.on{border-color:var(--accent);color:var(--accent)}
-.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub){filter:url(#pixelate) blur(1px) opacity(.62);cursor:pointer;border-radius:4px;user-select:none}
-.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub).revealed{filter:none}
+.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount){filter:url(#pixelate) blur(1px) opacity(.62);cursor:pointer;border-radius:4px;user-select:none}
+.app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount).revealed{filter:none}
 .chkrow input{width:auto;margin:0}
 
 .overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
@@ -741,6 +741,21 @@ function applyTheme(){
   if(t==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",t);
   applyPalette();   // recompute the accent for whichever theme is now active
 }
+// Body font — experiment-friendly. All choices are system/already-loaded families so nothing is fetched
+// over the network (keeps the app fully offline / local-first).
+const FONTS=[
+  ["plex","IBM Plex Sans",'"IBM Plex Sans",system-ui,-apple-system,sans-serif'],
+  ["system","System UI",'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'],
+  ["fraunces","Fraunces (serif)",'"Fraunces",Georgia,serif'],
+  ["georgia","Georgia",'Georgia,"Times New Roman",serif'],
+  ["palatino","Palatino",'"Palatino Linotype",Palatino,"Book Antiqua",serif'],
+  ["garamond","Garamond",'Garamond,"EB Garamond","Times New Roman",serif'],
+  ["helvetica","Helvetica / Arial",'"Helvetica Neue",Helvetica,Arial,sans-serif'],
+  ["verdana","Verdana",'Verdana,Geneva,Tahoma,sans-serif'],
+  ["trebuchet","Trebuchet MS",'"Trebuchet MS",Tahoma,sans-serif'],
+  ["mono","IBM Plex Mono",'"IBM Plex Mono",ui-monospace,Menlo,monospace']
+];
+function applyFont(){ const f=FONTS.find(x=>x[0]===(S&&S.settings&&S.settings.font))||FONTS[0]; document.documentElement.style.setProperty("--fs-sans", f[2]); }
 try{ matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{ if(((S&&S.settings&&S.settings.theme)||"auto")==="auto") applyPalette(); }); }catch(_){}
 
 const acctById=id=>S.accounts.find(a=>a.id===id);
@@ -1512,6 +1527,9 @@ function renderModal(){
           <div class="sfield"><span>Colors</span>
             <div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>
           </div>
+          <label class="sfield"><span>Font <span class="infodot" data-tip="Change the body typeface. Every choice is built into your system or already bundled — nothing is downloaded, so it works offline.">&#9432;</span></span>
+            <select id="font-pick">${FONTS.map(([id,label,stack])=>`<option value="${id}" ${(S.settings.font||"plex")===id?"selected":""} style="font-family:${escAttr(stack)}">${esc(label)}</option>`).join("")}</select>
+          </label>
           <div class="sfield"><span>Density <span class="infodot" data-tip="Compact tightens the spacing between rows and entries so more fits on screen. Comfortable is the roomier default.">&#9432;</span></span>
             <div class="themeseg" role="group" aria-label="Density">${[["comfortable","Comfortable"],["compact","Compact"]].map(([k,l])=>`<button class="${((S.settings.density||"comfortable")===k)?"on":""}" data-action="set-density" data-density="${k}">${l}</button>`).join("")}</div>
           </div>
@@ -1850,7 +1868,7 @@ function goHash(h){ if(location.hash===h){ render(); } else { location.hash=h; }
 window.addEventListener("hashchange",()=>{ applyHash(); render(); });
 document.addEventListener("click",e=>{
   // Privacy Mode: with amounts blurred, a click on any number reveals just that one (for screenshots).
-  if(UI.privacy){ const amt=e.target.closest(".cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub"); if(amt){ amt.classList.toggle("revealed"); return; } }
+  if(UI.privacy){ const amt=e.target.closest(".cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount"); if(amt){ amt.classList.toggle("revealed"); return; } }
   const el=e.target.closest("[data-action]"); if(!el) return;
   const a=el.dataset.action, id=el.dataset.id;
   switch(a){
@@ -2014,6 +2032,8 @@ document.addEventListener("change",e=>{
   if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
   const tz=e.target.closest("#tz-pick");
   if(tz){ S.settings.orgTimezone=tz.value; save(); render(); renderModal(); return; }
+  const fp=e.target.closest("#font-pick");
+  if(fp){ S.settings.font=fp.value; applyFont(); save(); renderModal(); return; }
   const stt=e.target.closest("#showtime-toggle");
   if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
   const scc=e.target.closest("#showcents-toggle");
@@ -2491,6 +2511,7 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
   normalizeState();
   loadUIPrefs();
   applyTheme();
+  applyFont();
   if(STORE===FILE_STORE){
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
     if(!GITINFO || GITINFO.appVersion!==VERSION){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null}; }  // frontend/backend mismatch → prompt restart
