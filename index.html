@@ -1915,6 +1915,27 @@ function amountInput(el){
   try{ el.setSelectionRange(pos,pos); }catch(_){}
   if(unGroup(el.value)>0){ const row=el.closest(".line"); const other=row&&row.querySelector(el.dataset.line==="debit"?"[data-line=credit]":"[data-line=debit]"); if(other) other.value=""; }
   syncLines();
+  const me=UI.modal&&UI.modal.draft&&UI.modal.draft.lines[+el.dataset.i]; if(me) me._auto=false;   // this leg is now hand-entered
+  autoConvertLeg(el);
+}
+// Multi-currency helper: in a 2-leg entry, fill the OTHER leg's balancing side with the converted amount
+// (via saved rates) so it balances in the base currency without hand-math. Only fills when that side is
+// still empty, so it never clobbers an amount you set yourself; same-currency legs just mirror 1:1.
+function autoConvertLeg(el){
+  const d=UI.modal&&UI.modal.draft; if(!d||d.lines.length!==2) return;
+  const i=+el.dataset.i, o=1-i, L=d.lines[i], O=d.lines[o];
+  if(!L.accountId||!O.accountId) return;
+  const amt=unGroup(el.value); if(!(amt>0)) return;
+  const opp=el.dataset.line==="debit"?"credit":"debit";
+  if((O[opp]||0)>0 && !O._auto) return;           // don't overwrite an amount the user typed on the other leg (but do keep our own auto-fill in sync)
+  const curL=accCur(acctById(L.accountId)), curO=accCur(acctById(O.accountId));
+  const per=toBase(1,curO); if(!(per>0)) return;
+  const otherAmt=round2(toBase(amt,curL)/per);    // base value of this leg, expressed in the other leg's currency
+  O[opp]=otherAmt; O[el.dataset.line]=0; O._auto=true;
+  const orow=document.querySelector(`#lines .line[data-i="${o}"]`);
+  if(orow){ const of=orow.querySelector(`[data-line=${opp}]`); if(of&&document.activeElement!==of) of.value=fmtGroup(otherAmt);
+            const os=orow.querySelector(`[data-line=${el.dataset.line}]`); if(os&&document.activeElement!==os) os.value=""; }
+  updateBal();
 }
 function syncLines(){
   const d=UI.modal.draft;
