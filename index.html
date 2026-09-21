@@ -291,6 +291,7 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--neg)!important;
 textarea{font-family:inherit;resize:vertical;min-height:44px;line-height:1.4}
 input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
 .amtin{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+.amtin:disabled{background:var(--surface-2);color:var(--faint);cursor:not-allowed;opacity:.7}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -1796,8 +1797,8 @@ function lineRow(l,i){
         </button>
         ${open?acctPickPanel(i,l.accountId,used):""}
       </div></div>
-    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="debit" data-i="${i}" value="${l.debit?fmtGroup(l.debit):""}" placeholder="0.00">
-    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="credit" data-i="${i}" value="${l.credit?fmtGroup(l.credit):""}" placeholder="0.00">
+    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="debit" data-i="${i}" value="${l.debit?fmtGroup(l.debit):""}" placeholder="0.00"${(l.credit>0)?" disabled":""}>
+    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="credit" data-i="${i}" value="${l.credit?fmtGroup(l.credit):""}" placeholder="0.00"${(l.debit>0)?" disabled":""}>
     ${(UI.modal.draft.lines.length>2) ? (i>=2 ? `<button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>` : `<span></span>`) : ""}
   </div>`;
 }
@@ -1938,6 +1939,17 @@ function amountInput(el){
   syncLines();
   const me=UI.modal&&UI.modal.draft&&UI.modal.draft.lines[+el.dataset.i]; if(me) me._auto=false;   // this leg is now hand-entered
   autoConvertLeg(el);
+  reconcileAmountLocks();
+}
+// A line is a debit OR a credit — grey out (disable) the empty side whenever the other side has a value.
+function reconcileAmountLocks(){
+  const d=UI.modal&&UI.modal.draft; if(!d) return;
+  document.querySelectorAll("#lines .line").forEach(row=>{
+    const L=d.lines[+row.dataset.i]; if(!L) return;
+    const db=row.querySelector("[data-line=debit]"), cr=row.querySelector("[data-line=credit]");
+    if(db && document.activeElement!==db) db.disabled=(L.credit||0)>0;
+    if(cr && document.activeElement!==cr) cr.disabled=(L.debit||0)>0;
+  });
 }
 // Multi-currency helper: in a 2-leg entry, fill the OTHER leg's balancing side with the converted amount
 // (via saved rates) so it balances in the base currency without hand-math. Only fills when that side is
