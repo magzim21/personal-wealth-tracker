@@ -181,8 +181,13 @@ input,select{font-family:inherit;color:var(--ink)}
 .lp-details .lp-fine{padding:0 16px 14px 40px;margin:4px 0 0}
 .nav button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 2px}
-.curpick{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
-.curpick select{font-weight:400;color:var(--ink);width:100%}
+/* footer: Settings always shown; Currency + Exchange rates reveal on hover (mirrors the nav's Dashboard/About) */
+.foot-more{display:flex;flex-direction:column;gap:8px;overflow:hidden;max-height:0;opacity:0;transition:max-height .22s ease,opacity .16s ease,margin-top .22s ease}
+.side-foot:hover .foot-more,.side-foot:focus-within .foot-more{max-height:130px;opacity:1;margin-top:8px}
+.foot-hint{display:flex;justify-content:center;align-items:center;color:var(--faint);max-height:20px;opacity:.5;overflow:hidden;transition:max-height .18s ease,opacity .16s ease,margin-top .18s ease;margin-top:6px}
+.foot-hint svg{width:15px;height:15px;transform:rotate(180deg)}
+.side-foot:hover .foot-hint,.side-foot:focus-within .foot-hint{max-height:0;opacity:0;margin-top:0}
+.curpick-sel{width:100%;padding:4px 9px;font-size:12.5px;line-height:1.2;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-sm)}
 .themeseg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
 .themeseg button{border:0;background:none;color:var(--muted);font-weight:500;font-size:12px;padding:6px 4px;border-radius:5px}
 .themeseg button:hover{color:var(--ink)}
@@ -837,10 +842,11 @@ function render(){
         })()}
       </nav>
       <div class="side-foot">
-        <label class="curpick"><span>Currency</span>
-          <select id="cur-pick">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
-        </label>
-        <button class="btn sm" data-action="open-rates" style="width:100%;margin-top:10px">Exchange rates</button>
+        <div class="foot-hint" aria-hidden="true" title="Currency & rates">${I.chev}</div>
+        <div class="foot-more">
+          <select id="cur-pick" class="curpick-sel" aria-label="Display currency" title="Display currency">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
+          <button class="btn sm" data-action="open-rates" style="width:100%">Exchange rates</button>
+        </div>
         <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Settings</button>
         ${STORE!==FILE_STORE?`<button class="btn sm" data-action="download-build" style="width:100%;margin-top:8px">⤓ Desktop app (.zip)</button>`:``}
       </div>
