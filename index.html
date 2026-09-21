@@ -290,6 +290,7 @@ input[type=text],input[type=date],input[type=number],select,textarea{background:
 input.invalid,select.invalid,textarea.invalid{border-color:var(--neg)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--neg) 20%,transparent)}
 textarea{font-family:inherit;resize:vertical;min-height:44px;line-height:1.4}
 input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+.amtin{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -1696,7 +1697,7 @@ go run server.go          # Go</pre>
       </div>
       <div class="modal-f">${UI.modal.id?`<button class="btn" data-action="del-tx-modal" style="color:var(--neg)">${I.trash}Delete</button>`:""}<div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-tx" id="save-tx">Save</button></div>
     </div></div>`;
-    document.querySelectorAll("[data-line]").forEach(el=>{ el.addEventListener("input",syncLines); el.addEventListener("change", el.dataset.line==="acct" ? ()=>{ syncLines(); renderModal(); } : syncLines); });
+    document.querySelectorAll("[data-line]").forEach(el=>{ el.addEventListener("input", (el.dataset.line==="debit"||el.dataset.line==="credit") ? function(){ amountInput(this); } : syncLines); el.addEventListener("change", el.dataset.line==="acct" ? ()=>{ syncLines(); renderModal(); } : syncLines); });
     const ain=document.getElementById("ai-desc"); if(ain) ain.addEventListener("keydown",ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); aiDraft(); } });
     updateBal();
   }
@@ -1774,8 +1775,8 @@ function lineRow(l,i){
         </button>
         ${open?acctPickPanel(i,l.accountId,used):""}
       </div></div>
-    <input type="number" step="0.01" data-line="debit" data-i="${i}" value="${l.debit||""}" placeholder="0.00">
-    <input type="number" step="0.01" data-line="credit" data-i="${i}" value="${l.credit||""}" placeholder="0.00">
+    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="debit" data-i="${i}" value="${l.debit?fmtGroup(l.debit):""}" placeholder="0.00">
+    <input type="text" inputmode="decimal" autocomplete="off" class="amtin" data-line="credit" data-i="${i}" value="${l.credit?fmtGroup(l.credit):""}" placeholder="0.00">
     ${(UI.modal.draft.lines.length>2) ? (i>=2 ? `<button class="iconbtn rmline" data-action="rm-line" data-i="${i}" aria-label="Remove line">${I.x}</button>` : `<span></span>`) : ""}
   </div>`;
 }
@@ -1901,6 +1902,20 @@ function acctPickPanel(i,selId,exclude){
     <div class="acctpanel-list" id="acctpanel-list-${i}">${acctPickListBody(i,selId,exclude,UI.acctPickFilter)}</div>
   </div>`;
 }
+// group an amount string with thousands separators: "20000.5" -> "20,000.5" (comma to match the app's money format)
+function fmtGroup(v){ let raw=String(v==null?"":v).replace(/[^0-9.]/g,""); const i=raw.indexOf("."); let ip=i>=0?raw.slice(0,i):raw, dp=i>=0?raw.slice(i):""; if(dp.length>3) dp=dp.slice(0,3); ip=ip.replace(/^0+(?=\d)/,""); return ip.replace(/\B(?=(\d{3})+(?!\d))/g,",")+dp; }
+const unGroup=s=>parseFloat(String(s||"").replace(/,/g,""))||0;
+// live handler for a debit/credit field: regroup with the caret preserved, and enforce that a line is
+// a debit OR a credit — never both (typing into one clears the other).
+function amountInput(el){
+  const before=el.value, caret=el.selectionStart||0;
+  const digitsBefore=before.slice(0,caret).replace(/[^0-9]/g,"").length;
+  el.value=fmtGroup(before);
+  let pos=0,seen=0; while(pos<el.value.length && seen<digitsBefore){ if(el.value[pos]>="0"&&el.value[pos]<="9") seen++; pos++; }
+  try{ el.setSelectionRange(pos,pos); }catch(_){}
+  if(unGroup(el.value)>0){ const row=el.closest(".line"); const other=row&&row.querySelector(el.dataset.line==="debit"?"[data-line=credit]":"[data-line=debit]"); if(other) other.value=""; }
+  syncLines();
+}
 function syncLines(){
   const d=UI.modal.draft;
   d.date=document.getElementById("tx-date").value;
@@ -1909,8 +1924,8 @@ function syncLines(){
   document.querySelectorAll("#lines .line").forEach(row=>{
     const i=+row.dataset.i; const L=d.lines[i]; if(!L) return;
     const sel=row.querySelector("[data-line=acct]"); if(sel) L.accountId=sel.value;   // a 'propose' row has no picker
-    const db=row.querySelector("[data-line=debit]"); if(db) L.debit=parseFloat(db.value)||0;
-    const cr=row.querySelector("[data-line=credit]"); if(cr) L.credit=parseFloat(cr.value)||0;
+    const db=row.querySelector("[data-line=debit]"); if(db) L.debit=unGroup(db.value);
+    const cr=row.querySelector("[data-line=credit]"); if(cr) L.credit=unGroup(cr.value);
   });
   updateBal();
 }
