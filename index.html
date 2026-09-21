@@ -644,6 +644,7 @@ const CUR_GROUPS=[
 ];
 const CURRENCIES=CUR_GROUPS.flatMap(g=>g[1].map(x=>x[0]));
 const CUR_NAMES=Object.fromEntries(CUR_GROUPS.flatMap(g=>g[1]));
+const VEHICLES=["USD","EUR","GBP","JPY","CHF","CAD","AUD","CNY"];   // pivot currencies you can anchor rates to
 // IANA time-zone list for the organization-timezone picker (falls back to a short list on old engines)
 const TZLIST=(()=>{ try{ return Intl.supportedValuesOf("timeZone"); }catch(_){ return ["UTC","America/Vancouver","America/Toronto","America/New_York","America/Chicago","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Moscow","Asia/Almaty","Asia/Dubai","Asia/Tokyo","Australia/Sydney"]; } })();
 const deviceTz=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"; }catch(_){ return "UTC"; } };
@@ -747,8 +748,10 @@ function normalizeState(){
   const logged=new Set(S.auditLog.map(e=>e.txId));
   S.transactions.forEach(t=>{ if(!logged.has(t.id)) S.auditLog.push({ts:t.createdAt,action:"create",txId:t.id,desc:t.description}); });
   // v4 backfill: freeze each leg's USD rate (historical FX). We have no historical rate for old entries,
-  // so we stamp the current rate ONCE — from then on it's frozen and the entry can't drift.
-  S.transactions.forEach(t=>{ (t.lines||[]).forEach(l=>{ if(l.rate==null) l.rate=round4(rateUSD(accCur(acctById(l.accountId)))); }); });
+  // so we stamp the current rate ONCE — from then on it's frozen and the entry can't drift. Also record
+  // the pivot/vehicle each entry's rates are in (pre-v4 books were always USD-anchored).
+  if(S.settings.rates[vehicle()]==null) S.settings.rates[vehicle()]=1;   // the pivot must read as 1.0
+  S.transactions.forEach(t=>{ if(t.vehicle==null) t.vehicle="USD"; (t.lines||[]).forEach(l=>{ if(l.rate==null) l.rate=round4(rateUSD(accCur(acctById(l.accountId)))); }); });
   S.schemaVersion=SCHEMA;   // stamp the data-shape version this app writes
 }
 // append-only audit log: never rewrite past entries, only add.
@@ -816,6 +819,7 @@ function typeBalanceBase(tid){ return round2(accountsInType(tid).reduce((s,a)=>s
 function classTotalBase(cls){ return round2(typesInClass(cls).reduce((s,t)=>s+typeBalanceBase(t.id),0)); }
 /* ---- currency + conversion ---- */
 const base=()=>S.settings.currency;
+const vehicle=()=>(S.settings&&S.settings.vehicle)||"USD";   // pivot currency all rates are anchored to (frozen rates are "vehicle value of 1 unit")
 const accCur=a=>(a&&a.currency)?a.currency:base();
 function rateUSD(cur){ const r=S.settings&&S.settings.rates; return r&&r[cur]!=null?r[cur]:1; } // USD value of 1 unit of cur (USD is the vehicle/pivot currency)
 function convert(amount,from,to){ if(from===to) return amount; return amount*rateUSD(from)/rateUSD(to); }
@@ -969,7 +973,7 @@ function viewAccounts(){
   return out;
 }
 
-function txAmount(t){ return round2(txUSD(t)/rateUSD(base())); }   // the entry's frozen USD magnitude, shown in the current display base
+function txAmount(t){ return round2(convert(txUSD(t),t.vehicle||"USD",base())); }   // frozen magnitude (in the entry's own vehicle) shown in the current display base
 function sortTxs(arr){
   const s=UI.ledgerSort||"date-desc";
   const ord=new Map(S.transactions.map((t,i)=>[t.id,i])); // insertion order: later index = more recently added
@@ -1590,7 +1594,10 @@ function renderModal(){
           <label class="sfield"><span>Time zone <span class="infodot" data-tip="Decides which calendar day a transaction is dated to — so an entry made late at night, or from another zone, still lands on the right day.">&#9432;</span></span>
             <select id="tz-pick"><option value="" ${!S.settings.orgTimezone?"selected":""}>Same as my system (${esc(deviceTz())})</option>${TZLIST.map(z=>`<option value="${escAttr(z)}" ${S.settings.orgTimezone===z?"selected":""}>${esc(z)}</option>`).join("")}</select>
           </label>
-          <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”.</p>
+          <label class="sfield"><span>Vehicle (pivot) currency <span class="infodot" data-tip="The single currency every exchange rate is anchored to. A cross-rate between two other currencies is derived through it (e.g. UAH→USD→ILS), so there's no need for a direct UAH/ILS quote. USD is the default because fiat, crypto and metals are all quoted against USD.&#10;&#10;Changing it is NOT retrospective: existing entries keep the pivot and frozen rates they were booked with, so their balance and value never move. Only NEW entries use the new pivot.">&#9432;</span></span>
+            <select id="vehicle-pick">${VEHICLES.map(c=>`<option value="${c}" ${vehicle()===c?"selected":""}>${esc(c)} · ${esc(CUR_NAMES[c]||"")}</option>`).join("")}</select>
+          </label>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Your display currency is set from the sidebar; live exchange rates live under “Exchange rates”. The vehicle is only the pivot rates hang off — your display currency can be anything.</p>
         </div>
         <div>
           <div style="${eb}">Right sidebar <span class="infodot" data-tip="Quiet extra panels in the space to the right of the page on wide screens (≥1280px). They fetch public data over the internet, but your ledger is never sent.">&#9432;</span></div>
@@ -1969,8 +1976,11 @@ function updateBal(){
   const ok=Math.abs(diff)<=tol && dr>0;
   const row=document.getElementById("balrow");
   const pristine=!dr && !cr;   // nothing entered yet — keep the row collapsed (it eases open once you type)
+  const curs=[...new Set(d.lines.map(l=>{const a=acctById(l.accountId);return a?accCur(a):null;}).filter(Boolean))];
+  const multi=curs.length>1;   // cross-currency — explain how it balances
+  const tip=multi?` <span class="infodot" data-tip="These legs are in different currencies (${curs.join(", ")}), so they can't balance by matching raw numbers — they balance in your display currency (${base()}). Each leg is converted through the ${vehicle()} pivot at that leg's rate (e.g. ${curs[0]}→${vehicle()}→${base()}), and the rate is FROZEN onto the entry when you save, so this balance never shifts if rates move later.">&#9432;</span>`:"";
   row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""));
-  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span class="balverdict">${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span>`;
+  row.innerHTML=`<span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span>${tip}</span><span class="balverdict">${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span>`;
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
 
@@ -2174,6 +2184,10 @@ document.addEventListener("change",e=>{
   if(el){ el.blur(); S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }   // blur so the footer isn't pinned open by :focus-within
   const tz=e.target.closest("#tz-pick");
   if(tz){ S.settings.orgTimezone=tz.value; save(); render(); renderModal(); return; }
+  const veh=e.target.closest("#vehicle-pick");
+  if(veh){ const nv=veh.value, r=S.settings.rates; const anchor=r[nv]||1;   // re-anchor: divide all rates by the new pivot so it reads 1.0 (a pure ratio change; conversions are unchanged, existing entries keep their own frozen rates/vehicle)
+    if(anchor>0){ Object.keys(r).forEach(c=>{ r[c]=round4(r[c]/anchor); }); r[nv]=1; }
+    S.settings.vehicle=nv; save(); render(); renderModal(); toast(`Vehicle currency set to ${nv} — new entries only.`); return; }
   const fp=e.target.closest("#font-pick");
   if(fp){ S.settings.font=fp.value; applyFont(); save(); renderModal(); return; }
   const stt=e.target.closest("#showtime-toggle");
@@ -2323,6 +2337,7 @@ function saveTx(){
   const prevRate=accId=>{ if(!prev) return null; const pl=(prev.lines||[]).find(x=>x.accountId===accId); return pl&&pl.rate!=null?pl.rate:null; };
   const tx={id:UI.modal.id||uid(),date:d.date,description:(d.description||"").trim()||"(no description)",
     createdAt:(prev&&prev.createdAt)||new Date().toISOString(),   // immutable booking instant: preserved on edit, set once on create
+    vehicle:(prev&&prev.vehicle)||vehicle(),                      // the pivot the frozen rates are in — kept on edit so a later vehicle change isn't retrospective
     lines:lines.map(l=>{ const kept=prevRate(l.accountId); return {accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0),rate:(kept!=null?kept:round4(rateUSD(accCur(acctById(l.accountId)))))}; })};
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
   if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id); if(prev&&prev.deleted){tx.deleted=prev.deleted;tx.deletedAt=prev.deletedAt;} S.transactions[idx]=tx; const ch=txDiff(prev||{},tx); if(ch.length) logAudit("edit",tx.id,{desc:tx.description,changes:ch});}

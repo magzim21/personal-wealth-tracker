@@ -53,6 +53,16 @@ eq(debitUSD(), 71.47, "frozen debit UNCHANGED after rate crash");               
 eq(debitUSD() === creditUSD(), true, "entry STILL balanced after rate crash");
 S.settings.rates.CAD = 0.7147;
 
+// --- changing the vehicle (re-anchor) is a pure ratio change: conversions must be identical before/after ---
+S.settings.currency = "USD";
+const before = round4(convert(1000, "CAD", "ILS"));
+const anchor = S.settings.rates.EUR;                                            // re-anchor USD-map to EUR
+Object.keys(S.settings.rates).forEach((c) => { S.settings.rates[c] = round4(S.settings.rates[c] / anchor); });
+S.settings.rates.EUR = 1;
+const after = round4(convert(1000, "CAD", "ILS"));
+eq(Math.abs(before - after) <= before * 1e-3, true, `re-anchoring leaves cross-conversions unchanged (within rounding): ${before} vs ${after}`);
+eq(S.settings.rates.EUR, 1, "new vehicle reads as 1.0");
+
 // --- thousands grouping (numbers are important) ---
 eq(fmtGroup("1000000"), "1,000,000", "group millions");
 eq(fmtGroup("20000.5"), "20,000.5", "group thousands with decimal");
