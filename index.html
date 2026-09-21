@@ -197,7 +197,13 @@ input,select{font-family:inherit;color:var(--ink)}
 .curp-chev{flex:none;display:flex;color:var(--faint);margin-left:auto}
 .curp-chev svg{width:14px;height:14px;transition:transform .18s}
 .curp.open .curp-chev svg{transform:rotate(180deg)}
-.curpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);max-height:300px;overflow:auto;padding:4px}
+.curpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);max-height:340px;overflow:hidden;display:flex;flex-direction:column}
+.curpanel.grouped{width:300px}
+.curpanel-search{padding:8px;border-bottom:1px solid var(--line);flex:none}
+.curpanel-search input{width:100%}
+.curpanel-list{overflow:auto;padding:4px}
+.curp-group{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);padding:8px 12px 3px;position:sticky;top:0;background:var(--surface)}
+.curp-empty{padding:14px 12px;color:var(--muted);font-size:13px;text-align:center}
 .curp-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:6px 10px;border:0;background:none;font:inherit;color:var(--ink);cursor:pointer;border-radius:7px}
 .curp-opt:hover{background:var(--surface-2)}
 .curp-opt.sel{background:var(--accent-soft)}
@@ -626,8 +632,14 @@ const PROJECT="personal-wealth-tracker";
 function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
   const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   return `${PROJECT}_${ts}_${COMMIT}.${ext}`; }   // sortable: project _ YYYYMMDD-HHMMSS _ commit
-const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
-const CUR_NAMES={USD:"United States",EUR:"Euro area",GBP:"United Kingdom",JPY:"Japan",CAD:"Canada",AUD:"Australia",CHF:"Switzerland",CNY:"China",INR:"India",BRL:"Brazil",MXN:"Mexico",SGD:"Singapore",HKD:"Hong Kong",NZD:"New Zealand",SEK:"Sweden",NOK:"Norway",PLN:"Poland",ZAR:"South Africa",AED:"United Arab Emirates",TRY:"Türkiye"};
+// Full currency set (XE-style): precious metals, crypto, and the ISO-4217 fiat list.
+const CUR_GROUPS=[
+  ["Precious metals",[["XAU","Gold (troy oz)"],["XAG","Silver (troy oz)"],["XPT","Platinum (troy oz)"],["XPD","Palladium (troy oz)"]]],
+  ["Crypto",[["BTC","Bitcoin"],["ETH","Ethereum"],["USDT","Tether"],["USDC","USD Coin"],["BNB","BNB"],["XRP","XRP"],["SOL","Solana"],["ADA","Cardano"],["DOGE","Dogecoin"],["TRX","TRON"],["DOT","Polkadot"],["MATIC","Polygon"],["LTC","Litecoin"],["BCH","Bitcoin Cash"],["LINK","Chainlink"],["XLM","Stellar"],["AVAX","Avalanche"],["XMR","Monero"]]],
+  ["Fiat",[["AED","United Arab Emirates"],["AFN","Afghanistan"],["ALL","Albania"],["AMD","Armenia"],["ANG","Netherlands Antilles"],["AOA","Angola"],["ARS","Argentina"],["AUD","Australia"],["AWG","Aruba"],["AZN","Azerbaijan"],["BAM","Bosnia & Herzegovina"],["BBD","Barbados"],["BDT","Bangladesh"],["BGN","Bulgaria"],["BHD","Bahrain"],["BIF","Burundi"],["BMD","Bermuda"],["BND","Brunei"],["BOB","Bolivia"],["BRL","Brazil"],["BSD","Bahamas"],["BTN","Bhutan"],["BWP","Botswana"],["BYN","Belarus"],["BZD","Belize"],["CAD","Canada"],["CDF","Congo (DRC)"],["CHF","Switzerland"],["CLP","Chile"],["CNY","China"],["COP","Colombia"],["CRC","Costa Rica"],["CUP","Cuba"],["CVE","Cape Verde"],["CZK","Czechia"],["DJF","Djibouti"],["DKK","Denmark"],["DOP","Dominican Republic"],["DZD","Algeria"],["EGP","Egypt"],["ERN","Eritrea"],["ETB","Ethiopia"],["EUR","Euro area"],["FJD","Fiji"],["FKP","Falkland Islands"],["GBP","United Kingdom"],["GEL","Georgia"],["GHS","Ghana"],["GIP","Gibraltar"],["GMD","Gambia"],["GNF","Guinea"],["GTQ","Guatemala"],["GYD","Guyana"],["HKD","Hong Kong"],["HNL","Honduras"],["HRK","Croatia"],["HTG","Haiti"],["HUF","Hungary"],["IDR","Indonesia"],["ILS","Israel"],["INR","India"],["IQD","Iraq"],["IRR","Iran"],["ISK","Iceland"],["JMD","Jamaica"],["JOD","Jordan"],["JPY","Japan"],["KES","Kenya"],["KGS","Kyrgyzstan"],["KHR","Cambodia"],["KMF","Comoros"],["KPW","North Korea"],["KRW","South Korea"],["KWD","Kuwait"],["KYD","Cayman Islands"],["KZT","Kazakhstan"],["LAK","Laos"],["LBP","Lebanon"],["LKR","Sri Lanka"],["LRD","Liberia"],["LSL","Lesotho"],["LYD","Libya"],["MAD","Morocco"],["MDL","Moldova"],["MGA","Madagascar"],["MKD","North Macedonia"],["MMK","Myanmar"],["MNT","Mongolia"],["MOP","Macau"],["MRU","Mauritania"],["MUR","Mauritius"],["MVR","Maldives"],["MWK","Malawi"],["MXN","Mexico"],["MYR","Malaysia"],["MZN","Mozambique"],["NAD","Namibia"],["NGN","Nigeria"],["NIO","Nicaragua"],["NOK","Norway"],["NPR","Nepal"],["NZD","New Zealand"],["OMR","Oman"],["PAB","Panama"],["PEN","Peru"],["PGK","Papua New Guinea"],["PHP","Philippines"],["PKR","Pakistan"],["PLN","Poland"],["PYG","Paraguay"],["QAR","Qatar"],["RON","Romania"],["RSD","Serbia"],["RUB","Russia"],["RWF","Rwanda"],["SAR","Saudi Arabia"],["SBD","Solomon Islands"],["SCR","Seychelles"],["SDG","Sudan"],["SEK","Sweden"],["SGD","Singapore"],["SHP","Saint Helena"],["SLE","Sierra Leone"],["SOS","Somalia"],["SRD","Suriname"],["SSP","South Sudan"],["STN","São Tomé & Príncipe"],["SYP","Syria"],["SZL","Eswatini"],["THB","Thailand"],["TJS","Tajikistan"],["TMT","Turkmenistan"],["TND","Tunisia"],["TOP","Tonga"],["TRY","Türkiye"],["TTD","Trinidad & Tobago"],["TWD","Taiwan"],["TZS","Tanzania"],["UAH","Ukraine"],["UGX","Uganda"],["USD","United States"],["UYU","Uruguay"],["UZS","Uzbekistan"],["VES","Venezuela"],["VND","Vietnam"],["VUV","Vanuatu"],["WST","Samoa"],["XAF","Central Africa (CFA)"],["XCD","East Caribbean"],["XOF","West Africa (CFA)"],["XPF","CFP franc"],["YER","Yemen"],["ZAR","South Africa"],["ZMW","Zambia"],["ZWL","Zimbabwe"]]]
+];
+const CURRENCIES=CUR_GROUPS.flatMap(g=>g[1].map(x=>x[0]));
+const CUR_NAMES=Object.fromEntries(CUR_GROUPS.flatMap(g=>g[1]));
 // IANA time-zone list for the organization-timezone picker (falls back to a short list on old engines)
 const TZLIST=(()=>{ try{ return Intl.supportedValuesOf("timeZone"); }catch(_){ return ["UTC","America/Vancouver","America/Toronto","America/New_York","America/Chicago","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Moscow","Asia/Almaty","Asia/Dubai","Asia/Tokyo","Australia/Sydney"]; } })();
 const deviceTz=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"; }catch(_){ return "UTC"; } };
@@ -1829,10 +1841,21 @@ function curField(id,cur,list){
     ${open?curPanel(id,cur,list):""}
   </div>`;
 }
+function curOpt(id,c,cur){ return `<button type="button" role="option" class="curp-opt${c===cur?" sel":""}" data-action="cur-choose" data-cur-id="${id}" data-cur="${c}"><span class="curp-code">${esc(c)}</span><span class="curp-cty">${esc(CUR_NAMES[c]||"")}</span></button>`; }
+function curListBody(id,cur,list,rawq){
+  if(list&&list.length) return list.map(c=>curOpt(id,c,cur)).join("");   // footer: short flat list of held currencies
+  const q=(rawq||"").trim().toLowerCase(); let body="";
+  for(const [gname,items] of CUR_GROUPS){
+    const hits=items.filter(([c,n])=>!q||c.toLowerCase().includes(q)||n.toLowerCase().includes(q));
+    if(!hits.length) continue;
+    body+=`<div class="curp-group">${esc(gname)}</div>`+hits.map(([c])=>curOpt(id,c,cur)).join("");
+  }
+  return body||`<div class="curp-empty">No currency matches “${esc(q)}”.</div>`;
+}
 function curPanel(id,cur,list){
-  const L=(list&&list.length)?list:CURRENCIES;
-  const opts=L.map(c=>`<button type="button" role="option" class="curp-opt${c===cur?" sel":""}" data-action="cur-choose" data-cur-id="${id}" data-cur="${c}"><span class="curp-code">${esc(c)}</span><span class="curp-cty">${esc(CUR_NAMES[c]||"")}</span></button>`).join("");
-  return `<div class="curpanel" id="curpanel-${id}" role="listbox">${opts}</div>`;
+  const grouped=!(list&&list.length);   // forms → grouped + search; footer → flat
+  const search=grouped?`<div class="curpanel-search"><input type="text" id="curfilter" placeholder="Search currency or country…" autocomplete="off" value="${escAttr(UI.curFilter||"")}"></div>`:"";
+  return `<div class="curpanel${grouped?" grouped":""}" id="curpanel-${id}" role="listbox">${search}<div class="curpanel-list" id="curpanel-list-${id}">${curListBody(id,cur,list,grouped?UI.curFilter:"")}</div></div>`;
 }
 function positionCurPanel(id){
   const wrap=document.querySelector(`.curp[data-cur-id="${id}"]`); if(!wrap) return;
@@ -2002,7 +2025,7 @@ document.addEventListener("click",e=>{
       renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
     case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; UI.dateMode="days"; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
-    case "cur-open": { const cid=el.dataset.curId; UI.curOpen=(UI.curOpen===cid?null:cid); (cid==="cur-pick"?render():renderModal()); if(UI.curOpen===cid) positionCurPanel(cid); break; }
+    case "cur-open": { const cid=el.dataset.curId; UI.curOpen=(UI.curOpen===cid?null:cid); UI.curFilter=""; (cid==="cur-pick"?render():renderModal()); if(UI.curOpen===cid){ positionCurPanel(cid); const f=document.getElementById("curfilter"); if(f) f.focus(); } break; }
     case "cur-choose": { const cid=el.dataset.curId, val=el.dataset.cur; UI.curOpen=null;
       if(cid==="cur-pick"){ S.settings.currency=val; if(S.settings.rates[val]==null)S.settings.rates[val]=1; save(); render(); }
       else if(cid==="na-cur"){ if(UI.sub) UI.sub.draft.currency=val; renderModal(); }
@@ -2062,6 +2085,13 @@ document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); 
   positionAcctPanel(i);
 });
 window.addEventListener("resize",()=>{ if(UI.acctPickOpen!=null) closeAcctPanel(); });
+document.addEventListener("input",e=>{ const f=e.target.closest("#curfilter"); if(!f) return;   // currency live filter: rebuild only the list body so the search field keeps focus
+  UI.curFilter=f.value; const id=UI.curOpen; if(!id) return;
+  const list=document.getElementById("curpanel-list-"+id); if(!list) return;
+  const cur=(document.getElementById(id)||{}).value||"";
+  list.innerHTML=curListBody(id,cur,null,f.value);
+  positionCurPanel(id);
+});
 // clear the red 'invalid' highlight as soon as a flagged field gets a value
 ["input","change"].forEach(ev=>document.addEventListener(ev,e=>{ const t=e.target; if(t&&t.classList&&t.classList.contains("invalid")&&String(t.value||"").trim()) t.classList.remove("invalid"); }));
 // instant hover tooltip for [data-tip] elements (native title has an uncontrollable ~1s delay)
