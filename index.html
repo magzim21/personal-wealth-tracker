@@ -187,7 +187,23 @@ input,select{font-family:inherit;color:var(--ink)}
 .foot-hint{display:flex;justify-content:center;align-items:center;color:var(--faint);max-height:20px;opacity:.5;overflow:hidden;transition:max-height .18s ease,opacity .16s ease,margin-top .18s ease;margin-top:6px}
 .foot-hint svg{width:15px;height:15px;transform:rotate(180deg)}
 .side-foot:hover .foot-hint,.side-foot:focus-within .foot-hint{max-height:0;opacity:0;margin-top:0}
-.curpick-sel{width:100%;padding:4px 9px;font-size:12.5px;line-height:1.2;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-sm)}
+/* custom currency picker (native <select> can't be themed and shows no country) */
+.curp{position:relative;width:100%}
+.curp-btn{width:100%;display:flex;align-items:center;gap:8px;padding:5px 9px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font:inherit;color:var(--ink);cursor:pointer;text-align:left;transition:border-color .15s ease,box-shadow .15s ease}
+.curp-btn:hover{border-color:var(--muted)}
+.curp.open .curp-btn{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.curp-btn .curp-code{font-weight:700;font-size:12.5px;flex:none}
+.curp-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
+.curp-chev{flex:none;display:flex;color:var(--faint);margin-left:auto}
+.curp-chev svg{width:14px;height:14px;transition:transform .18s}
+.curp.open .curp-chev svg{transform:rotate(180deg)}
+.curpanel{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lift);max-height:300px;overflow:auto;padding:4px}
+.curp-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:6px 10px;border:0;background:none;font:inherit;color:var(--ink);cursor:pointer;border-radius:7px}
+.curp-opt:hover{background:var(--surface-2)}
+.curp-opt.sel{background:var(--accent-soft)}
+.curp-opt .curp-code{flex:none;width:40px;font-weight:700;font-size:12.5px}
+.curp-opt.sel .curp-code{color:var(--accent-ink)}
+.curp-cty{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .themeseg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
 .themeseg button{border:0;background:none;color:var(--muted);font-weight:500;font-size:12px;padding:6px 4px;border-radius:5px}
 .themeseg button:hover{color:var(--ink)}
@@ -611,6 +627,7 @@ function backupName(ext){ const d=new Date(),p=n=>String(n).padStart(2,"0");
   const ts=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   return `${PROJECT}_${ts}_${COMMIT}.${ext}`; }   // sortable: project _ YYYYMMDD-HHMMSS _ commit
 const CURRENCIES=["USD","EUR","GBP","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","SGD","HKD","NZD","SEK","NOK","PLN","ZAR","AED","TRY"];
+const CUR_NAMES={USD:"United States",EUR:"Euro area",GBP:"United Kingdom",JPY:"Japan",CAD:"Canada",AUD:"Australia",CHF:"Switzerland",CNY:"China",INR:"India",BRL:"Brazil",MXN:"Mexico",SGD:"Singapore",HKD:"Hong Kong",NZD:"New Zealand",SEK:"Sweden",NOK:"Norway",PLN:"Poland",ZAR:"South Africa",AED:"United Arab Emirates",TRY:"Türkiye"};
 // IANA time-zone list for the organization-timezone picker (falls back to a short list on old engines)
 const TZLIST=(()=>{ try{ return Intl.supportedValuesOf("timeZone"); }catch(_){ return ["UTC","America/Vancouver","America/Toronto","America/New_York","America/Chicago","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Moscow","Asia/Almaty","Asia/Dubai","Asia/Tokyo","Australia/Sydney"]; } })();
 const deviceTz=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"; }catch(_){ return "UTC"; } };
@@ -844,7 +861,7 @@ function render(){
       <div class="side-foot">
         <div class="foot-hint" aria-hidden="true" title="Currency & rates">${I.chev}</div>
         <div class="foot-more">
-          <select id="cur-pick" class="curpick-sel" aria-label="Display currency" title="Display currency">${CURRENCIES.map(c=>`<option value="${c}" ${S.settings.currency===c?"selected":""}>${c}</option>`).join("")}</select>
+          ${curField("cur-pick",S.settings.currency,accountCurrencies())}
           <button class="btn sm" data-action="open-rates" style="width:100%">Exchange rates</button>
         </div>
         <button class="btn sm" data-action="open-data" style="width:100%;margin-top:8px">Settings</button>
@@ -1264,7 +1281,7 @@ function softDeleteTx(did){
 /* animate the modal out, then clear it and run an optional callback */
 function dismissModal(cb){
   const ov=document.querySelector(".overlay");
-  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
+  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; UI.curOpen=null; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
   if(!ov || window.matchMedia("(prefers-reduced-motion:reduce)").matches){ finish(); return; }
   ov.classList.add("closing");
   setTimeout(finish,160);
@@ -1483,7 +1500,7 @@ function renderModal(){
           <label class="field"><span>Type</span><select id="ac-type">${typeOpts(a.cls)}</select></label>
         </div>
         <label class="field" id="ac-newtype-wrap" style="${a.typeId==="__new"?"":"display:none"}"><span>New type name</span><input type="text" id="ac-newtype" placeholder="e.g. Bank"></label>
-        <label class="field"><span>Currency</span><select id="ac-cur">${CURRENCIES.map(c=>`<option value="${c}" ${a.currency===c?"selected":""}>${c}</option>`).join("")}</select></label>
+        <label class="field"><span>Currency</span>${curField("ac-cur",a.currency)}</label>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ac-comment" rows="2" placeholder="Notes about this account">${esc(a.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-acct">Save</button></div>
@@ -1686,7 +1703,7 @@ function renderSubModal(root){
       <label class="field"><span>Type</span><select id="na-type">${typesOfClass.map(t=>`<option value="${t.id}" ${s.typeId===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}<option value="__new" ${s.typeId==="__new"?"selected":""}>＋ New type…</option></select></label>
       ${s.typeId==="__new"?`<label class="field"><span>New type name</span><input id="na-newtype" value="${escAttr(s.newType||"")}" placeholder="e.g. Vehicles"></label>`:""}
       <label class="field"><span>Account name</span><input id="na-name" value="${escAttr(s.name||"")}" placeholder="e.g. Tesla Model 3"></label>
-      <label class="field"><span>Currency</span><select id="na-cur">${CURRENCIES.map(c=>`<option value="${c}" ${s.currency===c?"selected":""}>${c}</option>`).join("")}</select></label>
+      <label class="field"><span>Currency</span>${curField("na-cur",s.currency)}</label>
     </div>
     <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="sub-close">Cancel</button><button class="btn primary" data-action="sub-create">Create &amp; use</button></div>
   </div></div>`;
@@ -1802,6 +1819,34 @@ function positionDatePanel(){
   panel.style.left=left+"px";
 }
 function closeDatePanel(){ UI.datePickOpen=false; const p=document.getElementById("datepanel"); if(p) p.remove(); const w=document.getElementById("datepick"); if(w) w.classList.remove("open"); }
+// custom currency picker (styled to the app, native <select> can't be) — each option shows CODE + country.
+// A hidden input carries the value so existing read/sync code (getElementById(id).value) keeps working.
+function curField(id,cur,list){
+  cur=cur||base(); const open=UI.curOpen===id;
+  return `<div class="curp${open?" open":""}" data-cur-id="${id}">
+    <input type="hidden" id="${id}" value="${escAttr(cur)}">
+    <button type="button" class="curp-btn" data-action="cur-open" data-cur-id="${id}" aria-haspopup="listbox" aria-expanded="${open}"><span class="curp-code">${esc(cur)}</span>${CUR_NAMES[cur]?`<span class="curp-name">${esc(CUR_NAMES[cur])}</span>`:""}<span class="curp-chev">${I.chev}</span></button>
+    ${open?curPanel(id,cur,list):""}
+  </div>`;
+}
+function curPanel(id,cur,list){
+  const L=(list&&list.length)?list:CURRENCIES;
+  const opts=L.map(c=>`<button type="button" role="option" class="curp-opt${c===cur?" sel":""}" data-action="cur-choose" data-cur-id="${id}" data-cur="${c}"><span class="curp-code">${esc(c)}</span><span class="curp-cty">${esc(CUR_NAMES[c]||"")}</span></button>`).join("");
+  return `<div class="curpanel" id="curpanel-${id}" role="listbox">${opts}</div>`;
+}
+function positionCurPanel(id){
+  const wrap=document.querySelector(`.curp[data-cur-id="${id}"]`); if(!wrap) return;
+  const btn=wrap.querySelector(".curp-btn"), panel=wrap.querySelector(".curpanel"); if(!btn||!panel) return;
+  const r=btn.getBoundingClientRect(), vh=window.innerHeight, vw=window.innerWidth;
+  panel.style.width=Math.max(r.width,190)+"px";
+  const ph=panel.offsetHeight;
+  panel.style.top=(vh-r.bottom < ph+8 && r.top > ph+8) ? (r.top-ph-4)+"px" : (r.bottom+4)+"px";
+  let left=r.left, pw=panel.offsetWidth; if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+  panel.style.left=left+"px";
+}
+function closeCurPanel(){ UI.curOpen=null; const p=document.querySelector(".curpanel"); if(p) p.remove(); document.querySelectorAll(".curp.open").forEach(el=>el.classList.remove("open")); }
+// currencies that actually have an account (for the footer's display-currency picker); USD fallback when the book is empty
+function accountCurrencies(){ const s=[...new Set(S.accounts.filter(a=>!a.deleted).map(a=>accCur(a)))]; return s.length?s:["USD"]; }
 // custom colour-coded account picker (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts).
 // The list is a 3-level indent — class › type › account — for at-a-glance hierarchy.
 function acctPickListBody(i,selId,exclude,rawq){
@@ -1957,6 +2002,13 @@ document.addEventListener("click",e=>{
       renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
     case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; UI.dateMode="days"; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
+    case "cur-open": { const cid=el.dataset.curId; UI.curOpen=(UI.curOpen===cid?null:cid); (cid==="cur-pick"?render():renderModal()); if(UI.curOpen===cid) positionCurPanel(cid); break; }
+    case "cur-choose": { const cid=el.dataset.curId, val=el.dataset.cur; UI.curOpen=null;
+      if(cid==="cur-pick"){ S.settings.currency=val; if(S.settings.rates[val]==null)S.settings.rates[val]=1; save(); render(); }
+      else if(cid==="na-cur"){ if(UI.sub) UI.sub.draft.currency=val; renderModal(); }
+      else if(cid==="ac-cur"){ if(UI.modal&&UI.modal.draft) UI.modal.draft.currency=val; renderModal(); }
+      else { const inp=document.getElementById(cid); if(inp){ inp.value=val; inp.dispatchEvent(new Event("change",{bubbles:true})); } (UI.modal?renderModal():render()); }
+      break; }
     case "date-prev": case "date-next": { const dir=(a==="date-next"?1:-1); const mode=UI.dateMode||"days"; let [y,m]=(UI.dateView||(UI.modal.draft.date||todayAccounting()).slice(0,7)).split("-").map(Number);
       if(mode==="days"){ m+=dir; if(m<1){m=12;y--;} if(m>12){m=1;y++;} } else if(mode==="months"){ y+=dir; } else { y+=dir*12; }
       UI.dateView=y+"-"+String(m).padStart(2,"0"); renderModal(); positionDatePanel(); break; }
@@ -1976,6 +2028,7 @@ document.addEventListener("keydown",e=>{
   if(!UI.modal) return;
   if(e.key==="Escape" && UI.acctPickOpen!=null){ closeAcctPanel(); return; }   // Esc closes an open account picker first, not the whole modal
   if(e.key==="Escape" && UI.datePickOpen){ closeDatePanel(); return; }
+  if(e.key==="Escape" && UI.curOpen){ closeCurPanel(); return; }
   if(e.key==="Escape"){ dismissModal(); return; }
   if(e.key==="Enter" && UI.modal.kind==="confirm"){ e.preventDefault(); const fn=pendingConfirm; dismissModal(fn); }
 });
@@ -1998,6 +2051,7 @@ function closeAcctPanel(){ // lightweight close (no full re-render) so a click t
 document.addEventListener("mousedown",e=>{ // click outside closes an open picker/calendar
   if(UI.acctPickOpen!=null && !e.target.closest(".acctpick")) closeAcctPanel();
   if(UI.datePickOpen && !e.target.closest(".datepick")) closeDatePanel();
+  if(UI.curOpen && !e.target.closest(".curp")) closeCurPanel();
 },true);
 document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter: rebuild only the list body (search input untouched, so it keeps focus)
   UI.acctPickFilter=f.value; const i=UI.acctPickOpen; if(i==null) return;
@@ -2039,7 +2093,7 @@ document.addEventListener("change",e=>{
   const omc=e.target.closest("#or-model-custom");
   if(omc){ const v=omc.value.trim(); try{ if(v) localStorage.setItem(OR_MODEL,v); else localStorage.removeItem(OR_MODEL); }catch(_){}; toast("AI model: "+orModel()+"."); return; }
   const el=e.target.closest("#cur-pick");
-  if(el){ S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }
+  if(el){ el.blur(); S.settings.currency=el.value; if(S.settings.rates[el.value]==null)S.settings.rates[el.value]=1; save(); render(); return; }   // blur so the footer isn't pinned open by :focus-within
   const tz=e.target.closest("#tz-pick");
   if(tz){ S.settings.orgTimezone=tz.value; save(); render(); renderModal(); return; }
   const fp=e.target.closest("#font-pick");
