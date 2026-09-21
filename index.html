@@ -437,6 +437,11 @@ table.register thead th{background:var(--surface-2)}
 .aibar input{flex:1;min-width:0}
 .aifield{border-top:1px solid var(--line);padding-top:13px;margin-top:2px}
 .betatag{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px;vertical-align:middle;margin-left:4px}
+/* Settings: a delimiter between each section */
+.settings-b{gap:0}
+.settings-b>div{padding:16px 0}
+.settings-b>div:first-child{padding-top:0}
+.settings-b>div+div{border-top:1px solid var(--line)}
 /* ==== custom, colour-coded account picker (replaces the native <select> — long chart of accounts,
    keyed to class colour like the Accounts view; panel is position:fixed so the modal's overflow can't clip it) ==== */
 .acctpick{position:relative;flex:1;min-width:0}
@@ -1491,14 +1496,7 @@ function renderModal(){
     const eb='font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px';
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:600px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>Settings</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
-      <div class="modal-b">
-        <div>
-          <div style="${eb}">Accounting mode <span class="betatag">beta</span></div>
-          <div class="sfield"><span>Books style <span class="infodot" data-tip="Personal is the default. Business (beta) tunes wording and examples for business books; deeper business features (income/expense, invoices) are coming.">&#9432;</span></span>
-            <div class="themeseg" role="group" aria-label="Accounting mode">${[["personal","Personal"],["business","Business"]].map(([k,l])=>`<button class="${((S.settings.accountingMode||"personal")===k)?"on":""}" data-action="set-acctmode" data-mode="${k}">${l}</button>`).join("")}</div>
-          </div>
-          <p class="muted" style="font-size:12px;margin:6px 0 0">Business mode is experimental — for now it only adjusts examples/wording. Your data is identical either way.</p>
-        </div>
+      <div class="modal-b settings-b">
         <div>
           <div style="${eb}">Appearance</div>
           <div class="sfield"><span>Theme</span>
@@ -1536,18 +1534,7 @@ function renderModal(){
                  <select id="or-model">${OR_MODELS.map(([v,lb])=>`<option value="${escAttr(v)}" ${(!UI.orCustom&&orModel()===v)?"selected":""}>${esc(lb)}</option>`).join("")}<option value="__custom" ${(UI.orCustom||!OR_MODELS.some(m=>m[0]===orModel()))?"selected":""}>Other…</option></select></label>
                ${(UI.orCustom||!OR_MODELS.some(m=>m[0]===orModel()))?`<label class="field" style="margin-top:8px"><span style="font-size:11px">Model id</span><input id="or-model-custom" value="${escAttr(orModel())}" spellcheck="false" placeholder="${OR_DEFAULT_MODEL}" style="font-family:var(--fs-mono);font-size:12.5px"></label>`:""}`
             : `<button class="btn sm" data-action="or-connect">Connect OpenRouter</button>`}
-          <p class="muted" style="font-size:12px;margin:8px 0 0">Turns a plain-words description into the two legs of a transaction. Numbers never leave your machine.</p>
-        </div>
-        <div>
-          <div style="${eb}">Privacy recommendations</div>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">This app already hardens what a page can control — spellcheck off, no translation, no referrer. A few browser-level collectors can only be turned off by you, in the browser itself. On Chrome:</p>
-          <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.6">
-            <li><b>Enhanced spell check</b> (sends typed text to Google) → Settings → Languages → <i>Spell check</i>: use <b>Basic</b>, not Enhanced.</li>
-            <li><b>Safe Browsing</b> (Enhanced sends URLs/content) → Settings → Privacy and security → Security: choose <b>Standard</b> or No protection.</li>
-            <li><b>Address-bar suggestions</b> → Privacy and security → <i>Search suggestions</i>: turn off “Autocomplete searches and URLs”.</li>
-            <li><b>Usage stats & Sync</b> → don’t sign in / disable Sync, and turn off “Help improve Chrome”.</li>
-          </ul>
-          <p class="muted" style="font-size:12px;margin:8px 0 0">For maximum isolation, run this app in a browser without Google services (ungoogled-chromium or Firefox).</p>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">Turns a plain-words description into the two legs of a transaction. Your balances, account ids and rates never leave your machine.</p>
         </div>
         <div>
           <div style="${eb}">Export</div>
@@ -1572,6 +1559,24 @@ function renderModal(){
           <button class="btn sm" data-action="download-build">Download desktop build (.zip)</button>
           <p class="muted" style="font-size:12px;margin:8px 0 0">A ready-to-run copy of this app plus a tiny Go / Node server. It stores your data in a file <b>you choose</b> (local disk, mounted drive, or iCloud) with automatic snapshots. Runs on your laptop with no internet.</p>
         </div>`}
+        <div>
+          <div style="${eb}">Privacy recommendations</div>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">This app already hardens what a page can control — spellcheck off, no translation, no referrer. A few browser-level collectors can only be turned off by you, in the browser itself. On Chrome:</p>
+          <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.6">
+            <li><b>Enhanced spell check</b> (sends typed text to Google) → Settings → Languages → <i>Spell check</i>: use <b>Basic</b>, not Enhanced.</li>
+            <li><b>Safe Browsing</b> (Enhanced sends URLs/content) → Settings → Privacy and security → Security: choose <b>Standard</b> or No protection.</li>
+            <li><b>Address-bar suggestions</b> → Privacy and security → <i>Search suggestions</i>: turn off “Autocomplete searches and URLs”.</li>
+            <li><b>Usage stats & Sync</b> → don’t sign in / disable Sync, and turn off “Help improve Chrome”.</li>
+          </ul>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">For maximum isolation, run this app in a browser without Google services (ungoogled-chromium or Firefox).</p>
+        </div>
+        <div>
+          <div style="${eb}">Experimental <span class="betatag">beta</span></div>
+          <div class="sfield"><span>Accounting mode <span class="infodot" data-tip="Personal is the default. Business (beta) tunes wording and examples for business books; deeper business features (income/expense, invoices) are coming.">&#9432;</span></span>
+            <div class="themeseg" role="group" aria-label="Accounting mode">${[["personal","Personal"],["business","Business"]].map(([k,l])=>`<button class="${((S.settings.accountingMode||"personal")===k)?"on":""}" data-action="set-acctmode" data-mode="${k}">${l}</button>`).join("")}</div>
+          </div>
+          <p class="muted" style="font-size:12px;margin:6px 0 0">Business mode is experimental — for now it only adjusts examples/wording. Your data is identical either way.</p>
+        </div>
         <textarea id="io-out" rows="5" readonly style="display:none" placeholder="Backup text"></textarea>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
