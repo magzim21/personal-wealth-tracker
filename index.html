@@ -1092,7 +1092,43 @@ function viewAbout(){
     </section>
 
     <section class="lp-sec">
-      <p class="lp-kicker">05 — And the details</p>
+      <p class="lp-kicker">05 — Three kinds of currency</p>
+      <h2>Account, vehicle, display — and why they’re different.</h2>
+      <p class="lp-p">Multi-currency money quietly involves <b>three</b> distinct currencies, and keeping them straight is what makes the numbers trustworthy:</p>
+      <ul class="lp-seclist">
+        <li><b>Account currency</b> — set <i>per account</i>. What that account is actually denominated in: a Monobank account in UAH, an Israeli account in ILS, a wallet in BTC. It never changes on its own; a hryvnia stays a hryvnia.</li>
+        <li><b>Base currency</b> (also called <i>display</i> or <i>default</i>) — set once, app-wide. The single currency every total is <i>shown</i> in, so a net worth spread across five currencies reads as one number. Changing it re-translates what you see; it never touches what’s stored.</li>
+        <li><b>Vehicle currency</b> (also called the <i>intermediary</i> or pivot; defaults to USD) — the currency cross-conversions <i>route through</i>, and the currency each entry is <b>frozen against</b> when you save. To value a UAH↔ILS entry we don’t hunt for a direct hryvnia-shekel quote — we hop UAH→USD→ILS. And the rate is locked onto the entry at save time, so a settled transaction’s value never drifts when live rates move later.</li>
+      </ul>
+      <figure class="lp-fig">
+        <svg viewBox="0 0 560 176" role="img" aria-label="Account currencies are converted at entry into the vehicle currency (USD), where each entry is frozen; totals are then translated live into the base currency you read.">
+          <defs><marker id="lpAc" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--accent)"/></marker><marker id="lpAcM" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--muted)"/></marker></defs>
+          <rect x="8" y="50" width="150" height="80" rx="11" fill="var(--surface)" stroke="var(--line-strong)"/>
+          <text x="83" y="76" text-anchor="middle" font-family="var(--fs-sans,sans-serif)" font-size="13" font-weight="600" fill="var(--ink)">Account currency</text>
+          <text x="83" y="97" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="11" fill="var(--faint)">per account</text>
+          <text x="83" y="115" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="11.5" fill="var(--muted)">UAH · ILS · BTC</text>
+          <line x1="158" y1="90" x2="200" y2="90" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#lpAc)"/>
+          <text x="179" y="80" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10" fill="var(--faint)">at entry</text>
+          <text x="179" y="108" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10" fill="var(--faint)">× rate</text>
+          <rect x="202" y="38" width="156" height="104" rx="11" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="280" y="64" text-anchor="middle" font-family="var(--fs-sans,sans-serif)" font-size="13" font-weight="600" fill="var(--ink)">Vehicle · USD</text>
+          <text x="280" y="83" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10.5" fill="var(--muted)">cross-rates hop here</text>
+          <text x="280" y="99" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10.5" fill="var(--muted)">UAH → USD → ILS</text>
+          <text x="280" y="120" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10.5" fill="var(--accent)">🔒 entry frozen here</text>
+          <line x1="358" y1="90" x2="400" y2="90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#lpAcM)"/>
+          <text x="379" y="80" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10" fill="var(--faint)">live</text>
+          <text x="379" y="108" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="10" fill="var(--faint)">translate</text>
+          <rect x="402" y="50" width="150" height="80" rx="11" fill="var(--surface)" stroke="var(--line-strong)"/>
+          <text x="477" y="76" text-anchor="middle" font-family="var(--fs-sans,sans-serif)" font-size="13" font-weight="600" fill="var(--ink)">Base currency</text>
+          <text x="477" y="97" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="11" fill="var(--faint)">display · default</text>
+          <text x="477" y="115" text-anchor="middle" font-family="var(--fs-mono,monospace)" font-size="11.5" fill="var(--muted)">what totals show in</text>
+        </svg>
+        <figcaption>Each account keeps its own currency; entries are frozen against the vehicle (USD by default), and every total is translated live into the one base currency you read. Only the vehicle→base hop floats — settled history stays put.</figcaption>
+      </figure>
+    </section>
+
+    <section class="lp-sec">
+      <p class="lp-kicker">06 — And the details</p>
       <h2>Small things that make it yours.</h2>
       <div class="lp-mini">
         <div class="lp-minicard"><h3>Multi-currency</h3><p>Each account keeps its own currency; balances convert to your display currency using rates you control or fetch live.</p></div>
@@ -1102,7 +1138,7 @@ function viewAbout(){
     </section>
 
     <section class="lp-sec">
-      <p class="lp-kicker">06 — For the security-minded</p>
+      <p class="lp-kicker">07 — For the security-minded</p>
       <h2>Everything that keeps your numbers in.</h2>
       <p class="lp-p">The short version is above; here is the full list, for anyone who wants to check the work.</p>
       <details class="lp-details">
