@@ -225,6 +225,13 @@ input,select{font-family:inherit;color:var(--ink)}
 .datepanel{position:fixed;z-index:120;width:272px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-lift);padding:10px}
 .dp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .dp-title{font-weight:700;font-size:14px}
+.dp-title-btn{border:0;background:none;font:inherit;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer;padding:4px 10px;border-radius:7px}
+.dp-title-btn:hover{background:var(--surface-2)}
+.dp-mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 0}
+.dp-mgrid .dmcell{height:42px;border:0;background:none;border-radius:8px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.dp-mgrid .dmcell:hover{background:var(--surface-2)}
+.dp-mgrid .dmcell.today{color:var(--accent);font-weight:800}
+.dp-mgrid .dmcell.sel{background:var(--accent);color:#fff}
 .dp-nav{display:grid;place-items:center;width:28px;height:28px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:7px}
 .dp-nav:hover{background:var(--surface-2);color:var(--accent)}
 .dp-nav svg{width:16px;height:16px}
@@ -1723,12 +1730,32 @@ const dpPad=n=>String(n).padStart(2,"0");
 const dpYmd=(y,m,d)=>y+"-"+dpPad(m)+"-"+dpPad(d);
 function fmtDateHuman(v){ if(!v) return ""; const [y,m,d]=String(v).split("-").map(Number); if(!y) return String(v); return DP_MONTHS[m-1].slice(0,3)+" "+d+", "+y; }
 function datePanel(sel){
+  const mode=UI.dateMode||"days";
   let vm=UI.dateView || (sel||todayAccounting()).slice(0,7);
   const [vy,vmo]=vm.split("-").map(Number);
+  const today=todayAccounting();
+  const foot=`<div class="dp-foot"><span></span><button type="button" class="dp-link" data-action="date-today">Today</button></div>`;
+  // click the title to drill up: days → months → years
+  if(mode==="months"){
+    const cells=DP_MONTHS.map((mn,idx)=>{ const m=idx+1; const isSel=sel && sel.slice(0,7)===dpYmd(vy,m,1).slice(0,7); const isToday=today.slice(0,7)===dpYmd(vy,m,1).slice(0,7); return `<button type="button" class="dmcell${isSel?" sel":""}${isToday?" today":""}" data-action="date-pick-month" data-month="${m}">${mn.slice(0,3)}</button>`; }).join("");
+    return `<div class="datepanel" id="datepanel" role="dialog" aria-label="Choose month">
+      <div class="dp-head"><button type="button" class="dp-nav" data-action="date-prev" aria-label="Previous year">${I.chev}</button>
+        <button type="button" class="dp-title dp-title-btn" data-action="date-mode-years">${vy}</button>
+        <button type="button" class="dp-nav" data-action="date-next" aria-label="Next year">${I.chev}</button></div>
+      <div class="dp-mgrid">${cells}</div>${foot}</div>`;
+  }
+  if(mode==="years"){
+    const start=vy-6; let cells="";
+    for(let y=start;y<start+12;y++){ const isSel=sel && Number(sel.slice(0,4))===y; const isToday=Number(today.slice(0,4))===y; cells+=`<button type="button" class="dmcell${isSel?" sel":""}${isToday?" today":""}" data-action="date-pick-year" data-year="${y}">${y}</button>`; }
+    return `<div class="datepanel" id="datepanel" role="dialog" aria-label="Choose year">
+      <div class="dp-head"><button type="button" class="dp-nav" data-action="date-prev" aria-label="Earlier years">${I.chev}</button>
+        <span class="dp-title">${start}–${start+11}</span>
+        <button type="button" class="dp-nav" data-action="date-next" aria-label="Later years">${I.chev}</button></div>
+      <div class="dp-mgrid">${cells}</div>${foot}</div>`;
+  }
   const startDow=new Date(vy,vmo-1,1).getDay();
   const daysInMonth=new Date(vy,vmo,0).getDate();
   const prevDays=new Date(vy,vmo-1,0).getDate();
-  const today=todayAccounting();
   let cells="";
   for(let i=0;i<startDow;i++){ const d=prevDays-startDow+1+i; cells+=`<button type="button" class="dcell out" data-action="date-pick" data-date="${dpYmd(vmo===1?vy-1:vy,vmo===1?12:vmo-1,d)}">${d}</button>`; }
   for(let d=1;d<=daysInMonth;d++){ const val=dpYmd(vy,vmo,d); cells+=`<button type="button" class="dcell${val===sel?" sel":""}${val===today?" today":""}" data-action="date-pick" data-date="${val}">${d}</button>`; }
@@ -1736,12 +1763,10 @@ function datePanel(sel){
   for(let i=1;i<=trail;i++){ cells+=`<button type="button" class="dcell out" data-action="date-pick" data-date="${dpYmd(vmo===12?vy+1:vy,vmo===12?1:vmo+1,i)}">${i}</button>`; }
   return `<div class="datepanel" id="datepanel" role="dialog" aria-label="Choose date">
     <div class="dp-head"><button type="button" class="dp-nav" data-action="date-prev" aria-label="Previous month">${I.chev}</button>
-      <span class="dp-title">${DP_MONTHS[vmo-1]} ${vy}</span>
+      <button type="button" class="dp-title dp-title-btn" data-action="date-mode-months">${DP_MONTHS[vmo-1]} ${vy}</button>
       <button type="button" class="dp-nav" data-action="date-next" aria-label="Next month">${I.chev}</button></div>
     <div class="dp-week">${DP_WD.map(w=>`<span>${w}</span>`).join("")}</div>
-    <div class="dp-grid">${cells}</div>
-    <div class="dp-foot"><span></span><button type="button" class="dp-link" data-action="date-today">Today</button></div>
-  </div>`;
+    <div class="dp-grid">${cells}</div>${foot}</div>`;
 }
 function positionDatePanel(){
   const wrap=document.getElementById("datepick"); if(!wrap) return;
@@ -1903,10 +1928,16 @@ document.addEventListener("click",e=>{
       UI.sub={legIndex:i,draft:{class:cls,typeId,newType:"",name:"",currency:base()}};
       renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
-    case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
-    case "date-prev": case "date-next": { const vm=UI.dateView||(UI.modal.draft.date||todayAccounting()).slice(0,7); let [y,m]=vm.split("-").map(Number); m+=(a==="date-next"?1:-1); if(m<1){m=12;y--;} if(m>12){m=1;y++;} UI.dateView=y+"-"+String(m).padStart(2,"0"); renderModal(); positionDatePanel(); break; }
-    case "date-pick": { UI.modal.draft.date=el.dataset.date; UI.dateView=el.dataset.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
-    case "date-today": { UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
+    case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; UI.dateMode="days"; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
+    case "date-prev": case "date-next": { const dir=(a==="date-next"?1:-1); const mode=UI.dateMode||"days"; let [y,m]=(UI.dateView||(UI.modal.draft.date||todayAccounting()).slice(0,7)).split("-").map(Number);
+      if(mode==="days"){ m+=dir; if(m<1){m=12;y--;} if(m>12){m=1;y++;} } else if(mode==="months"){ y+=dir; } else { y+=dir*12; }
+      UI.dateView=y+"-"+String(m).padStart(2,"0"); renderModal(); positionDatePanel(); break; }
+    case "date-mode-months": UI.dateMode="months"; renderModal(); positionDatePanel(); break;
+    case "date-mode-years": UI.dateMode="years"; renderModal(); positionDatePanel(); break;
+    case "date-pick-month": { let y=(UI.dateView||todayAccounting().slice(0,7)).split("-")[0]; UI.dateView=y+"-"+String(+el.dataset.month).padStart(2,"0"); UI.dateMode="days"; renderModal(); positionDatePanel(); break; }
+    case "date-pick-year": { const m=(UI.dateView||todayAccounting().slice(0,7)).split("-")[1]; UI.dateView=el.dataset.year+"-"+m; UI.dateMode="months"; renderModal(); positionDatePanel(); break; }
+    case "date-pick": { UI.modal.draft.date=el.dataset.date; UI.dateView=el.dataset.date.slice(0,7); UI.dateMode="days"; UI.datePickOpen=false; renderModal(); break; }
+    case "date-today": { UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.dateMode="days"; UI.datePickOpen=false; renderModal(); break; }
     case "save-tx": saveTx(); break;
     case "del-tx-modal": { const did=UI.modal.id; dismissModal(); softDeleteTx(did); break; }
   }
