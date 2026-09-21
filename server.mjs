@@ -75,7 +75,7 @@ createServer(async (req, res) => {
   if (u.pathname === "/api/version") {
     const git = (c) => { try { return execSync("git " + c, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; } };
     if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { appVersion: APP_VERSION, isRepo: false });
-    return json(res, 200, { appVersion: APP_VERSION, isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), dirty: git("status --porcelain") !== "" });
+    return json(res, 200, { appVersion: APP_VERSION, isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), date: git("show -s --format=%cs HEAD"), dirty: git("status --porcelain") !== "" });
   }
 
   if (u.pathname === "/api/pick") {

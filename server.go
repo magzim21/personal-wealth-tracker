@@ -176,7 +176,7 @@ func main() {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": true, "commit": git("rev-parse", "--short", "HEAD"),
-			"tag": git("describe", "--tags", "--exact-match", "HEAD"), "dirty": git("status", "--porcelain") != ""})
+			"tag": git("describe", "--tags", "--exact-match", "HEAD"), "date": git("show", "-s", "--format=%cs", "HEAD"), "dirty": git("status", "--porcelain") != ""})
 	})
 
 	mux.HandleFunc("/api/pick", func(w http.ResponseWriter, r *http.Request) {

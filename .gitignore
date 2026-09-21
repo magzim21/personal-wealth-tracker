@@ -18,3 +18,6 @@ node_modules/
 
 # server config (project-local; was ~/Library/Application Support)
 .pwt/
+
+# local editor / launch config (per-machine)
+.claude/
