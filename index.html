@@ -460,7 +460,11 @@ table.register thead th{background:var(--surface-2)}
 .app.privacy :is(.cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount).revealed{filter:none}
 .chkrow input{width:auto;margin:0}
 
-.overlay{position:fixed;inset:0;background:rgba(16,22,20,.5);backdrop-filter:blur(3px);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
+/* NB: no backdrop-filter here. A filter (or transform) on the overlay makes it the containing block
+   for position:fixed descendants, so an open picker panel (.curpanel/.acctpick/.datepick) would be
+   measured against the SCROLLED overlay instead of the viewport and land far from its trigger in a
+   tall, scrolled modal. The dark scrim alone gives enough separation. */
+.overlay{position:fixed;inset:0;background:rgba(16,22,20,.55);z-index:50;display:grid;place-items:center;padding:16px;overflow:auto}
 .overlay.sub{z-index:60}
 .modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column}
 .modal-h{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line)}
@@ -1555,6 +1559,11 @@ function renderModal(){
   // open (adding a line, an AI draft landing, an account change) must NOT re-flash the overlay —
   // that read as a full-page reload. Same key as last time ⇒ it's a re-render ⇒ suppress the anim.
   const _mk=UI.modal.kind+":"+(UI.modal.id||""), _reopen=(_mk===UI._modalKey); UI._modalKey=_mk;
+  // Re-rendering the modal rebuilds its innerHTML, which resets the scroll body to the top. On a
+  // re-render of the SAME modal (e.g. opening a currency picker, adding a line) that scroll jump
+  // yanks the field out from under the freshly-positioned popover and reads as "the modal vanished".
+  // Capture the scroll now and restore it after the rebuild.
+  const _prevScroll=_reopen?(()=>{const b=root.querySelector(".modal-b");return b?b.scrollTop:0;})():0;
   if(UI.modal.kind==="acct"){
     const a=UI.modal.draft;
     const typeOpts=cls=>{ const list=typesInClass(cls).slice().sort((x,y)=>x.name.localeCompare(y.name)); return `<option value="">${list.length?"— choose type —":"— none yet —"}</option>`+list.map(t=>`<option value="${t.id}" ${a.typeId===t.id?"selected":""}>${esc(t.name)}</option>`).join("")+`<option value="__new" ${a.typeId==="__new"?"selected":""}>+ New type…</option>`; };
@@ -1759,7 +1768,8 @@ go run server.go          # Go</pre>
     const ain=document.getElementById("ai-desc"); if(ain) ain.addEventListener("keydown",ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); aiDraft(); } });
     updateBal();
   }
-  if(_reopen){ const _ov=root.querySelector(".overlay"); if(_ov){ _ov.classList.add("no-anim"); const _mo=_ov.querySelector(".modal"); if(_mo) _mo.classList.add("no-anim"); } }
+  if(_reopen){ const _ov=root.querySelector(".overlay"); if(_ov){ _ov.classList.add("no-anim"); const _mo=_ov.querySelector(".modal"); if(_mo) _mo.classList.add("no-anim"); }
+    const _nb=root.querySelector(".modal-b"); if(_nb) _nb.scrollTop=_prevScroll; }   // keep the reader where they were
   renderSubModal(root);
 }
 function clsLabel(c){ const f=CLASSES.find(x=>x[0]===c); return f?f[1]:c; }
@@ -1900,8 +1910,7 @@ function curField(id,cur,list){
   return `<div class="curp${open?" open":""}" data-cur-id="${id}">
     <input type="hidden" id="${id}" value="${escAttr(cur)}">
     <button type="button" class="curp-btn" data-action="cur-open" data-cur-id="${id}" aria-haspopup="listbox" aria-expanded="${open}"><span class="curp-code">${esc(cur)}</span>${CUR_NAMES[cur]?`<span class="curp-name">${esc(CUR_NAMES[cur])}</span>`:""}<span class="curp-chev">${I.chev}</span></button>
-    ${open?curPanel(id,cur,list):""}
-  </div>`;
+  </div>`;   // panel is mounted on <body> by the cur-open handler, not inline
 }
 function curOpt(id,c,cur){ return `<button type="button" role="option" class="curp-opt${c===cur?" sel":""}" data-action="cur-choose" data-cur-id="${id}" data-cur="${c}"><span class="curp-code">${esc(c)}</span><span class="curp-cty">${esc(CUR_NAMES[c]||"")}</span></button>`; }
 function curListBody(id,cur,list,rawq){
@@ -1920,8 +1929,9 @@ function curPanel(id,cur,list){
   return `<div class="curpanel${grouped?" grouped":""}" id="curpanel-${id}" role="listbox">${search}<div class="curpanel-list" id="curpanel-list-${id}">${curListBody(id,cur,list,grouped?UI.curFilter:"")}</div></div>`;
 }
 function positionCurPanel(id){
-  const wrap=document.querySelector(`.curp[data-cur-id="${id}"]`); if(!wrap) return;
-  const btn=wrap.querySelector(".curp-btn"), panel=wrap.querySelector(".curpanel"); if(!btn||!panel) return;
+  // The panel lives on <body> (see cur-open), not inside .curp, so its position:fixed is measured
+  // against the viewport — immune to the modal's own scroll and to any filter/transform ancestor.
+  const btn=document.querySelector(`.curp[data-cur-id="${id}"] .curp-btn`), panel=document.getElementById("curpanel-"+id); if(!btn||!panel) return;
   const r=btn.getBoundingClientRect(), vh=window.innerHeight, vw=window.innerWidth;
   panel.style.width=Math.max(r.width,190)+"px";
   const ph=panel.offsetHeight;
@@ -1929,7 +1939,7 @@ function positionCurPanel(id){
   let left=r.left, pw=panel.offsetWidth; if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
   panel.style.left=left+"px";
 }
-function closeCurPanel(){ UI.curOpen=null; const p=document.querySelector(".curpanel"); if(p) p.remove(); document.querySelectorAll(".curp.open").forEach(el=>el.classList.remove("open")); }
+function closeCurPanel(){ UI.curOpen=null; const p=document.querySelector(".curpanel"); if(p) p.remove(); document.querySelectorAll(".curp.open").forEach(el=>el.classList.remove("open")); document.querySelectorAll('.curp-btn[aria-expanded="true"]').forEach(b=>b.setAttribute("aria-expanded","false")); }
 // currencies that actually have an account (for the footer's display-currency picker); USD fallback when the book is empty
 function accountCurrencies(){ const s=[...new Set(S.accounts.filter(a=>!a.deleted).map(a=>accCur(a)))]; return s.length?s:["USD"]; }
 // custom colour-coded account picker (native <select> can't be styled/colour-coded and is unwieldy for a long chart of accounts).
@@ -2137,8 +2147,17 @@ document.addEventListener("click",e=>{
       renderModal(); const nm=document.getElementById("na-name"); if(nm) nm.focus(); break; }
     case "tx-today": { syncLines(); UI.modal.draft.date=todayAccounting(); UI.dateView=UI.modal.draft.date.slice(0,7); UI.datePickOpen=false; renderModal(); break; }
     case "date-open": { syncLines(); UI.datePickOpen=!UI.datePickOpen; UI.acctPickOpen=null; UI.dateMode="days"; if(UI.datePickOpen) UI.dateView=(UI.modal.draft.date||todayAccounting()).slice(0,7); renderModal(); if(UI.datePickOpen) positionDatePanel(); break; }
-    case "cur-open": { const cid=el.dataset.curId; UI.curOpen=(UI.curOpen===cid?null:cid); UI.curFilter=""; (cid==="cur-pick"?render():renderModal()); if(UI.curOpen===cid){ positionCurPanel(cid); const f=document.getElementById("curfilter"); if(f) f.focus(); } break; }
-    case "cur-choose": { const cid=el.dataset.curId, val=el.dataset.cur; UI.curOpen=null;
+    case "cur-open": { const cid=el.dataset.curId, wasOpen=(UI.curOpen===cid); closeCurPanel();
+      // Open by appending the panel to <body> — NOT by re-rendering the modal. Re-rendering rebuilt the
+      // modal's innerHTML and reset its scroll, yanking the field out from under the panel (looked like
+      // "the modal disappeared"). This touches nothing but the popover.
+      if(!wasOpen){ UI.curOpen=cid; UI.curFilter="";
+        const wrap=el.closest(".curp"); if(wrap) wrap.classList.add("open"); el.setAttribute("aria-expanded","true");
+        const hid=document.getElementById(cid), cur=hid?hid.value:base(), list=(cid==="cur-pick")?accountCurrencies():null;
+        document.body.insertAdjacentHTML("beforeend", curPanel(cid,cur,list));
+        positionCurPanel(cid); const f=document.getElementById("curfilter"); if(f) f.focus(); }
+      break; }
+    case "cur-choose": { const cid=el.dataset.curId, val=el.dataset.cur; closeCurPanel();
       if(cid==="cur-pick"){ S.settings.currency=val; if(S.settings.rates[val]==null)S.settings.rates[val]=1; save(); render(); }
       else if(cid==="na-cur"){ if(UI.sub) UI.sub.draft.currency=val; renderModal(); }
       else if(cid==="ac-cur"){ if(UI.modal&&UI.modal.draft) UI.modal.draft.currency=val; renderModal(); }
@@ -2186,7 +2205,7 @@ function closeAcctPanel(){ // lightweight close (no full re-render) so a click t
 document.addEventListener("mousedown",e=>{ // click outside closes an open picker/calendar
   if(UI.acctPickOpen!=null && !e.target.closest(".acctpick")) closeAcctPanel();
   if(UI.datePickOpen && !e.target.closest(".datepick")) closeDatePanel();
-  if(UI.curOpen && !e.target.closest(".curp")) closeCurPanel();
+  if(UI.curOpen && !e.target.closest(".curp") && !e.target.closest(".curpanel")) closeCurPanel();   // panel lives on <body>, so exempt it too
 },true);
 document.addEventListener("input",e=>{ const f=e.target.closest("#acctfilter"); if(!f) return;   // live filter: rebuild only the list body (search input untouched, so it keeps focus)
   UI.acctPickFilter=f.value; const i=UI.acctPickOpen; if(i==null) return;
