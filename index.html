@@ -348,7 +348,8 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .filterbtn svg{width:14px;height:14px}
 .filterbtn.on{border-color:var(--accent);color:var(--accent)}
 .fbadge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
-.filterpanel{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0}
+.filterpanel{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0;max-height:0;opacity:0;overflow:hidden;transition:max-height .26s cubic-bezier(.2,.7,.3,1),opacity .2s ease,margin-top .26s ease}
+.filterpanel.open{max-height:200px;opacity:1;margin-top:2px}
 .ffield{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 .ffield select,.ffield input{font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
 .amtrow{display:flex;gap:6px}
@@ -1133,11 +1134,11 @@ function viewLedger(){
       <button class="${mode==="activity"?"on":""}" data-action="ledger-mode" data-mode="activity">Activity</button>
     </div>`;
   const AMT_OPS=[["","operator…"],["gt","greater than >"],["gte","at least ≥"],["lt","less than <"],["lte","at most ≤"],["eq","equals ="]];
-  const panel = UI.filtersOpen ? `<div class="filterpanel">
+  const panel = `<div class="filterpanel${UI.filtersOpen?" open":""}">
       <label class="ffield"><select id="ledger-acct">${acctOpts}</select></label>
       <label class="ffield"><span class="amtrow"><select id="amt-op">${AMT_OPS.map(([k,l])=>`<option value="${k}" ${amtOp===k?"selected":""}>${l}</option>`).join("")}</select><input id="amt-val" type="text" inputmode="decimal" autocomplete="off" placeholder="Amount (${base()})" value="${escAttr(UI.amtVal||"")}"></span></label>
       <div class="ffield" style="justify-content:flex-end"><button class="btn sm" data-action="ledger-clear">Clear all</button></div>
-    </div>` : "";
+    </div>`;
   const toolbar=`<div class="ledgerhead"><div class="ledgertools">
     <div class="lfilters">${modeSeg}
       <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
@@ -1913,7 +1914,10 @@ document.addEventListener("click",e=>{
     case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; UI.amtOp=""; UI.amtVal=""; render(); break;
     case "ledger-mode": UI.ledgerMode=el.dataset.mode; render(); break;
-    case "toggle-filters": UI.filtersOpen=!UI.filtersOpen; render(); break;
+    case "toggle-filters": { UI.filtersOpen=!UI.filtersOpen;   // toggle the class (no full re-render) so the panel eases open/closed
+      const fp=document.querySelector(".filterpanel"); if(fp) fp.classList.toggle("open",UI.filtersOpen);
+      const nF=(UI.ledgerAccount?1:0)+((UI.amtOp&&!isNaN(parseFloat(UI.amtVal)))?1:0);
+      el.classList.toggle("on", UI.filtersOpen||nF>0); el.setAttribute("aria-expanded",UI.filtersOpen); break; }
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
     case "fetch-rates": fetchRates(); break;
     case "open-data": UI.orCustom=false; UI.modal={kind:"data"}; renderModal(); break;
