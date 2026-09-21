@@ -579,7 +579,7 @@ button[data-tip],a[data-tip]{cursor:pointer}
 /* controls collapse to zero width (so the amount sits near the right edge) and expand on hover,
    which pushes the amount smoothly to the left to make room */
 .rowtools{display:inline-flex;align-items:center;gap:2px;width:0;overflow:hidden;opacity:0;pointer-events:none;transition:width .18s ease,opacity .14s ease}
-.arow:hover .rowtools,.arow:focus-within .rowtools{width:56px;opacity:1;pointer-events:auto}
+.arow:hover .rowtools,.arow:focus-within .rowtools{width:84px;opacity:1;pointer-events:auto}
 .typehead:hover .rowtools,.typehead:focus-within .rowtools{width:84px;opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion:reduce){.rowtools{transition:opacity .14s ease}}
 .typehead{transition:background .15s}
@@ -962,7 +962,8 @@ function viewAccounts(){
         return `<div class="arow acct">
           <span class="name"><span class="acctlink" data-action="open-account" data-id="${a.id}" title="View this account's postings">${esc(a.name)}</span>${cur!==base()?` <span class="curtag">${cur}</span>`:''}${a.comment?`<span class="cnote">${esc(a.comment)}</span>`:''}</span>
           <span class="bal">${native}${cnt(baseBal,base(),'acct:'+a.id)}</span>
-          <span class="rowtools"><button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
+          <span class="rowtools"><button class="iconbtn" data-action="new-tx-acct" data-id="${a.id}" data-tip="New transaction from this account">${I.plus}</button>
+          <button class="iconbtn" data-action="edit-acct" data-id="${a.id}" title="Edit">${I.edit}</button>
           <button class="iconbtn" data-action="del-acct" data-id="${a.id}" title="Delete">${I.trash}</button></span>
         </div>`;
       }).join("")||`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No accounts</span><span></span></div>`;
@@ -2030,6 +2031,7 @@ document.addEventListener("click",e=>{
     case "edit-type": { const t=typeById(id); if(t){ UI.modal={kind:"type",id,draft:{name:t.name,cls:t.class,comment:t.comment||""}}; renderModal(); } break; }
     case "del-type": { const tid=id; if(accountsInType(tid).length){ toast("This type has accounts — move or delete them first."); } else askConfirm("Delete this type?", ()=>{ S.types=S.types.filter(t=>t.id!==tid); save(); render(); }); break; }
     case "save-type": saveType(); break;
+    case "new-tx-acct": { txModal(null); const d=UI.modal&&UI.modal.draft; if(d&&d.lines[0]){ d.lines[0].accountId=id; renderModal(); const de=document.getElementById("tx-desc"); if(de) de.focus(); } break; }
     case "edit-acct": acctModal(acctById(id)); break;
     case "del-acct": delAccount(id); break;
     case "new-tx": txModal(null); break;
