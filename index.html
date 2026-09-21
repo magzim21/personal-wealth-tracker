@@ -329,7 +329,9 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .empty2-ic svg{width:100%;height:100%}
 .empty2 h3{font-size:16.5px;margin:0;color:var(--ink)}
 .empty2 p{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0 0 8px;max-width:360px}
-.ledgertools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--muted);position:sticky;top:var(--head-h,60px);z-index:6;background:var(--paper);padding:8px 0}
+/* the whole ledger header — toolbar AND the expanded filter row — sticks together under the main header */
+.ledgerhead{position:sticky;top:var(--head-h,60px);z-index:6;background:var(--paper);padding:8px 0 10px}
+.ledgertools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;font-weight:600;color:var(--muted)}
 .ledgertools .lfilters,.ledgertools .lsort{display:flex;align-items:center;gap:8px}
 .ledgertools .lfilters{flex:0 1 auto;min-width:0;flex-wrap:wrap}
 .ledgertools .lsort{flex:none;margin-left:auto}
@@ -339,11 +341,11 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .filterbtn svg{width:14px;height:14px}
 .filterbtn.on{border-color:var(--accent);color:var(--accent)}
 .fbadge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
-.filterpanel{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;padding:14px 16px;margin:0 0 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.filterpanel{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0}
 .ffield{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 .ffield select,.ffield input{font-weight:400;color:var(--ink);padding:6px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
 .amtrow{display:flex;gap:6px}
-.amtrow input{width:120px}
+.amtrow input{width:140px}
 .ledgertools .lcount{font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
 /* Entries / Activity mode toggle */
 .modeseg{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
@@ -1105,11 +1107,11 @@ function viewLedger(){
     </div>`;
   const AMT_OPS=[["","operator…"],["gt","greater than >"],["gte","at least ≥"],["lt","less than <"],["lte","at most ≤"],["eq","equals ="]];
   const panel = UI.filtersOpen ? `<div class="filterpanel">
-      <label class="ffield"><span>Account</span><select id="ledger-acct">${acctOpts}</select></label>
-      <label class="ffield"><span>Amount (${base()})</span><span class="amtrow"><select id="amt-op">${AMT_OPS.map(([k,l])=>`<option value="${k}" ${amtOp===k?"selected":""}>${l}</option>`).join("")}</select><input id="amt-val" type="number" inputmode="decimal" step="any" placeholder="0" value="${escAttr(UI.amtVal||"")}"></span></label>
+      <label class="ffield"><select id="ledger-acct">${acctOpts}</select></label>
+      <label class="ffield"><span class="amtrow"><select id="amt-op">${AMT_OPS.map(([k,l])=>`<option value="${k}" ${amtOp===k?"selected":""}>${l}</option>`).join("")}</select><input id="amt-val" type="text" inputmode="decimal" autocomplete="off" placeholder="Amount (${base()})" value="${escAttr(UI.amtVal||"")}"></span></label>
       <div class="ffield" style="justify-content:flex-end"><button class="btn sm" data-action="ledger-clear">Clear all</button></div>
     </div>` : "";
-  const toolbar=`<div class="ledgertools">
+  const toolbar=`<div class="ledgerhead"><div class="ledgertools">
     <div class="lfilters">${modeSeg}
       <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
       <button class="btn sm filterbtn${(UI.filtersOpen||nFilters)?" on":""}" data-action="toggle-filters" title="Filters" aria-expanded="${!!UI.filtersOpen}">${I.filter}<span>Filters</span>${nFilters?`<span class="fbadge">${nFilters}</span>`:""}</button>
@@ -1118,7 +1120,7 @@ function viewLedger(){
     ${mode==="entries"
       ? `<div class="lsort"><span>Sort</span><select id="ledger-sort">${LEDGER_SORTS.map(([k,l])=>`<option value="${k}" ${(UI.ledgerSort||"date-desc")===k?"selected":""}>${l}</option>`).join("")}</select></div>`
       : `<div class="lsort"><span class="muted" style="font-weight:400">Newest first</span></div>`}
-  </div>${panel}`;
+  </div>${panel}</div>`;
   return toolbar+listHtml;
 }
 function renderTxCard(t){
@@ -1964,7 +1966,7 @@ document.addEventListener("input",e=>{ const q=e.target.closest("#ledger-q"); if
   const pos=q.selectionStart; UI.ledgerQuery=q.value; render();
   const el=document.getElementById("ledger-q"); if(el){ el.focus(); try{ el.setSelectionRange(pos,pos); }catch(_){} } });
 document.addEventListener("input",e=>{ const a=e.target.closest("#amt-val"); if(!a) return;
-  UI.amtVal=a.value; render();
+  UI.amtVal=a.value.replace(/[^0-9.]/g,""); render();   // text input (not number) so the caret can be restored after re-render — otherwise digits reverse
   const el=document.getElementById("amt-val"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } });
 document.addEventListener("change",e=>{
   const om=e.target.closest("#or-model");
