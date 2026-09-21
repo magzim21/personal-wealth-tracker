@@ -40,6 +40,10 @@ jobs:
       - name: Smoke test
         run: node scripts/smoke-test.mjs
 
+      # 2a. multi-currency / FX math (frozen historical rates, cross-rate via USD, number formatting)
+      - name: FX & number unit tests
+        run: node scripts/test-fx.mjs
+
       # 2b. OpenAPI spec must match the server's /api routes
       - name: OpenAPI in sync
         run: node scripts/check-openapi.mjs

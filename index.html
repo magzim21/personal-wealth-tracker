@@ -629,7 +629,7 @@ const KEY="ledgerbook.min.v1";
 const VERSION="v59", UPDATED="2026-09-18";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
-const SCHEMA=3;   // data-shape version. A file with a higher number was written by a newer app → refuse to load.
+const SCHEMA=4;   // data-shape version. A file with a higher number was written by a newer app → refuse to load. (v4: per-leg frozen USD rate)
                   // v2: each transaction carries an immutable createdAt (booking timestamp), distinct from its (editable) date.
                   // v3: an append-only auditLog of create/edit/delete/restore events, and soft-deleted transactions (tx.deleted).
 const PROJECT="personal-wealth-tracker";
@@ -746,6 +746,9 @@ function normalizeState(){
   if(!Array.isArray(S.auditLog)) S.auditLog=[];
   const logged=new Set(S.auditLog.map(e=>e.txId));
   S.transactions.forEach(t=>{ if(!logged.has(t.id)) S.auditLog.push({ts:t.createdAt,action:"create",txId:t.id,desc:t.description}); });
+  // v4 backfill: freeze each leg's USD rate (historical FX). We have no historical rate for old entries,
+  // so we stamp the current rate ONCE — from then on it's frozen and the entry can't drift.
+  S.transactions.forEach(t=>{ (t.lines||[]).forEach(l=>{ if(l.rate==null) l.rate=round4(rateUSD(accCur(acctById(l.accountId)))); }); });
   S.schemaVersion=SCHEMA;   // stamp the data-shape version this app writes
 }
 // append-only audit log: never rewrite past entries, only add.
@@ -814,9 +817,15 @@ function classTotalBase(cls){ return round2(typesInClass(cls).reduce((s,t)=>s+ty
 /* ---- currency + conversion ---- */
 const base=()=>S.settings.currency;
 const accCur=a=>(a&&a.currency)?a.currency:base();
-function rateUSD(cur){ const r=S.settings&&S.settings.rates; return r&&r[cur]!=null?r[cur]:1; } // USD value of 1 unit of cur
+function rateUSD(cur){ const r=S.settings&&S.settings.rates; return r&&r[cur]!=null?r[cur]:1; } // USD value of 1 unit of cur (USD is the vehicle/pivot currency)
 function convert(amount,from,to){ if(from===to) return amount; return amount*rateUSD(from)/rateUSD(to); }
 function toBase(amount,cur){ return convert(amount,cur,base()); }
+// A transaction stores the USD rate of each leg's currency AS OF WHEN IT WAS RECORDED (historical FX).
+// lineRate returns that frozen rate, so a settled entry's value/balance never shifts when live rates or
+// the display base change later; old entries with no stored rate fall back to the current rate.
+function lineRate(l){ return (l&&l.rate!=null)?l.rate:rateUSD(accCur(acctById(l&&l.accountId))); }
+// USD value of a transaction (debit side) using each leg's FROZEN rate — the permanent, base-independent magnitude.
+function txUSD(t){ return round2((t.lines||[]).reduce((s,l)=>s+(l.debit||0)*lineRate(l),0)); }
 function money(n,cur){
   cur=cur||base();
   const d=(S.settings&&S.settings.showCents)?2:0;   // cents hidden by default; Settings toggle turns them on
@@ -960,7 +969,7 @@ function viewAccounts(){
   return out;
 }
 
-function txAmount(t){ return round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0)); }
+function txAmount(t){ return round2(txUSD(t)/rateUSD(base())); }   // the entry's frozen USD magnitude, shown in the current display base
 function sortTxs(arr){
   const s=UI.ledgerSort||"date-desc";
   const ord=new Map(S.transactions.map((t,i)=>[t.id,i])); // insertion order: later index = more recently added
@@ -1191,7 +1200,7 @@ function viewLedger(){
   return toolbar+listHtml;
 }
 function renderTxCard(t){
-  const drBase=round2(t.lines.reduce((s,l)=>s+toBase(l.debit||0,accCur(acctById(l.accountId))),0));
+  const drBase=txAmount(t);   // frozen-rate magnitude in the display base (stable across rate/base changes)
   const del=!!t.deleted;
   return `<div class="txcard${del?" deleted":""}">
     <div class="txhead">
@@ -2309,9 +2318,12 @@ function saveTx(){
   const seen=new Set();
   if(lines.some(l=>seen.has(l.accountId)||(seen.add(l.accountId),false))){ toast("The same account can't be on two lines of one entry."); return; }
   const prev=UI.modal.id?S.transactions.find(t=>t.id===UI.modal.id):null;
+  // Freeze each leg's USD rate (historical FX). On edit, keep the rate the same-currency leg was booked at
+  // (so amounts can be corrected without rewriting history); snapshot the current rate for a new/changed leg.
+  const prevRate=accId=>{ if(!prev) return null; const pl=(prev.lines||[]).find(x=>x.accountId===accId); return pl&&pl.rate!=null?pl.rate:null; };
   const tx={id:UI.modal.id||uid(),date:d.date,description:(d.description||"").trim()||"(no description)",
     createdAt:(prev&&prev.createdAt)||new Date().toISOString(),   // immutable booking instant: preserved on edit, set once on create
-    lines:lines.map(l=>({accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0)}))};
+    lines:lines.map(l=>{ const kept=prevRate(l.accountId); return {accountId:l.accountId,debit:round2(l.debit||0),credit:round2(l.credit||0),rate:(kept!=null?kept:round4(rateUSD(accCur(acctById(l.accountId)))))}; })};
   if((d.comment||"").trim()) tx.comment=d.comment.trim();
   if(UI.modal.id){const idx=S.transactions.findIndex(t=>t.id===UI.modal.id); if(prev&&prev.deleted){tx.deleted=prev.deleted;tx.deletedAt=prev.deletedAt;} S.transactions[idx]=tx; const ch=txDiff(prev||{},tx); if(ch.length) logAudit("edit",tx.id,{desc:tx.description,changes:ch});}
   else { S.transactions.push(tx); logAudit("create",tx.id,{desc:tx.description}); }
