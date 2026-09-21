@@ -18,6 +18,8 @@
   --line:#e0e6df; --line-strong:#cdd6cc;
   --accent:#1f6a52; --accent-ink:#12523f; --accent-soft:#e5f0eb;
   --pos:#1f7a52; --neg:#b23a37;
+  /* class colour coding (one source of truth): asset = blue, liability = red, equity = green */
+  --cls-asset:#2f6db3; --cls-liability:var(--neg); --cls-equity:var(--accent);
   --shadow:0 1px 2px rgba(24,36,32,.06), 0 8px 24px -12px rgba(24,36,32,.18);
   --shadow-lift:0 12px 40px -12px rgba(24,36,32,.35);
   --r:10px; --r-sm:7px;
@@ -86,7 +88,7 @@ input,select{font-family:inherit;color:var(--ink)}
 @media(max-width:560px){.dash-tiles{grid-template-columns:1fr}}
 .dtile{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:13px 16px;display:flex;flex-direction:column;gap:4px}
 .dtile b{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:19px}
-.dtile.cls-asset{border-left-color:var(--accent)} .dtile.cls-liability{border-left-color:var(--neg)} .dtile.cls-equity{border-left-color:#2f6db3}
+.dtile.cls-asset{border-left-color:var(--cls-asset)} .dtile.cls-liability{border-left-color:var(--cls-liability)} .dtile.cls-equity{border-left-color:var(--cls-equity)}
 .dash-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px}
 .dch{margin-bottom:12px}
 /* ---- right rail: quiet, low-contrast "food for thought" widgets that fill the gutter to the
@@ -138,7 +140,7 @@ input,select{font-family:inherit;color:var(--ink)}
 .barrow .bl{flex:0 0 32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .barrow .btrack{flex:1;height:9px;background:var(--surface-2);border-radius:5px;overflow:hidden}
 .barrow .bfill{display:block;height:100%;border-radius:5px;background:var(--muted)}
-.barrow .bfill.cls-asset{background:var(--accent)} .barrow .bfill.cls-liability{background:var(--neg)} .barrow .bfill.cls-equity{background:#2f6db3}
+.barrow .bfill.cls-asset{background:var(--cls-asset)} .barrow .bfill.cls-liability{background:var(--cls-liability)} .barrow .bfill.cls-equity{background:var(--cls-equity)}
 .barrow .bv{flex:0 0 auto;font-family:var(--fs-mono);font-variant-numeric:tabular-nums;color:var(--muted);min-width:66px;text-align:right}
 /* About / landing page — long editorial scroll with diagrams */
 .lp{max-width:680px;margin:0 auto;padding-bottom:40px}
@@ -263,7 +265,7 @@ label.field input,label.field select{font-weight:400;color:var(--ink)}
    and swells back to full weight along the account rows — a subtle thick/thin rhythm.
    Inset box-shadow (not border) so it never shifts the row text. */
 .groupwrap{--ctick:var(--line-strong)}
-.groupwrap.cls-asset{--ctick:var(--accent)} .groupwrap.cls-liability{--ctick:var(--neg)} .groupwrap.cls-equity{--ctick:#2f6db3}
+.groupwrap.cls-asset{--ctick:var(--cls-asset)} .groupwrap.cls-liability{--ctick:var(--cls-liability)} .groupwrap.cls-equity{--ctick:var(--cls-equity)}
 .groupwrap .typehead{box-shadow:inset 1.5px 0 0 var(--ctick)}
 .groupwrap .acctwrap{box-shadow:inset 3px 0 0 var(--ctick)}
 .grouphead .total{font-family:var(--fs-mono);font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--muted)}
@@ -446,9 +448,9 @@ table.register thead th{background:var(--surface-2)}
 .acctpick-chev{flex:none;display:flex;color:var(--faint)}
 .acctpick-chev svg{width:15px;height:15px;transition:transform .18s}
 .acctpick.open .acctpick-chev svg{transform:rotate(180deg)}
-.acctpick-btn.cls-asset,.acctopt-classblock.cls-asset{--c:var(--accent)}
-.acctpick-btn.cls-liability,.acctopt-classblock.cls-liability{--c:var(--neg)}
-.acctpick-btn.cls-equity,.acctopt-classblock.cls-equity{--c:#2f6db3}
+.acctpick-btn.cls-asset,.acctopt-classblock.cls-asset{--c:var(--cls-asset)}
+.acctpick-btn.cls-liability,.acctopt-classblock.cls-liability{--c:var(--cls-liability)}
+.acctpick-btn.cls-equity,.acctopt-classblock.cls-equity{--c:var(--cls-equity)}
 /* one continuous 2px colour strip down the whole class block (identity by class) */
 .acctopt-classblock{border-left:2px solid var(--c);margin-top:3px}
 .acctopt-classblock:first-child{margin-top:0}
