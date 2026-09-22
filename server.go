@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -43,6 +44,19 @@ const configSchema = 2
 // (frozen for this process) so the frontend can detect a stale, not-yet-restarted server.
 var appVersion = readAppVersion()
 
+// Robust stale-server detection: hash server.go at startup; if the source on disk changes afterwards,
+// /api/version reports stale and the app prompts a restart (the binary must also be rebuilt).
+func fileHash(p string) string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	s := sha256.Sum256(b)
+	return hex.EncodeToString(s[:])[:16]
+}
+
+var startSelfHash = fileHash("server.go")
+
 func readAppVersion() string {
 	b, err := os.ReadFile("index.html")
 	if err != nil {
@@ -58,6 +72,52 @@ func readAppVersion() string {
 // save, so a PUT with a stale If-Match is refused (409) and a stale in-memory copy can never
 // clobber a fresher file on disk.
 func etagOf(b []byte) string { s := sha256.Sum256(b); return `"` + hex.EncodeToString(s[:])[:16] + `"` }
+
+// historyLoss is the server's append-only backstop for /api/book PUT. The frontend enforces
+// "never delete, only tombstone" and an append-only auditLog, but that lived only in the
+// browser: a raw PUT (a hand-rolled API call, a buggy or stale client, a full overwrite) could
+// silently erase transactions with no trace. This refuses a write that drops an existing
+// transaction id or shrinks the auditLog, returning a human reason (or "" if the write is a
+// legitimate superset). A deliberate whole-book replace (import / restore) bypasses it with
+// ?replace=1, and a pre-overwrite snapshot is kept even then.
+func historyLoss(prev, next []byte) string {
+	type line struct {
+		Transactions []struct {
+			ID string `json:"id"`
+		} `json:"transactions"`
+		AuditLog []json.RawMessage `json:"auditLog"`
+	}
+	var p, n line
+	if json.Unmarshal(prev, &p) != nil {
+		return "" // unreadable prior file — nothing to protect
+	}
+	if json.Unmarshal(next, &n) != nil {
+		return "" // body validity is handled by the caller
+	}
+	after := map[string]bool{}
+	for _, t := range n.Transactions {
+		if t.ID != "" {
+			after[t.ID] = true
+		}
+	}
+	var missing []string
+	for _, t := range p.Transactions {
+		if t.ID != "" && !after[t.ID] {
+			missing = append(missing, t.ID)
+		}
+	}
+	if len(missing) > 0 {
+		eg := missing
+		if len(eg) > 3 {
+			eg = eg[:3]
+		}
+		return fmt.Sprintf("Refusing to drop %d existing transaction id(s) (e.g. %s) — history is append-only, so archive with a tombstone instead of deleting.", len(missing), strings.Join(eg, ", "))
+	}
+	if len(n.AuditLog) < len(p.AuditLog) {
+		return fmt.Sprintf("Refusing to shrink the audit log from %d to %d entries — it is append-only.", len(p.AuditLog), len(n.AuditLog))
+	}
+	return ""
+}
 
 func home() string { h, _ := os.UserHomeDir(); return h }
 
@@ -334,11 +394,12 @@ func main() {
 	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		stale := startSelfHash != "" && fileHash("server.go") != startSelfHash
 		if git("rev-parse", "--is-inside-work-tree") != "true" {
-			writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": false})
+			writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": false, "stale": stale})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": true, "commit": git("rev-parse", "--short", "HEAD"),
+		writeJSON(w, 200, map[string]any{"appVersion": appVersion, "isRepo": true, "stale": stale, "commit": git("rev-parse", "--short", "HEAD"),
 			"tag": git("describe", "--tags", "--exact-match", "HEAD"), "date": git("show", "-s", "--format=%cs", "HEAD"), "dirty": git("status", "--porcelain") != ""})
 	})
 
@@ -643,6 +704,24 @@ func main() {
 					writeJSON(w, 409, map[string]string{"error": "conflict", "message": "The ledger on disk is newer than the version you edited."})
 					return
 				}
+			}
+			replace := r.URL.Query().Get("replace") == "1"
+			prevBytes, prevErr := os.ReadFile(file)
+			if !replace && prevErr == nil {
+				if !json.Valid(body) {
+					writeJSON(w, 400, map[string]string{"error": "bad-json", "message": "Request body is not valid JSON."})
+					return
+				}
+				if drop := historyLoss(prevBytes, body); drop != "" {
+					w.Header().Set("ETag", etagOf(prevBytes))
+					writeJSON(w, 409, map[string]string{"error": "history-loss", "message": drop + " Pass ?replace=1 only when you mean to replace the whole book (import / restore)."})
+					return
+				}
+			}
+			// Snapshot the version being overwritten before touching the file, so even a
+			// ?replace=1 whole-book replace leaves the pre-replace book recoverable.
+			if replace && prevErr == nil {
+				writeSnapshot(prevBytes, snap)
 			}
 			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 				http.Error(w, "mkdir error", 500)

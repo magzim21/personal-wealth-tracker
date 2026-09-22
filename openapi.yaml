@@ -38,6 +38,7 @@ paths:
                 properties:
                   appVersion: { type: string, example: "v41" }
                   isRepo: { type: boolean }
+                  stale: { type: boolean, description: "True when the server's source file changed on disk since it started — the app prompts a restart. More reliable than the appVersion string." }
                   commit: { type: string, nullable: true, example: "195f229" }
                   tag: { type: string, nullable: true, example: "v1.11.0" }
                   dirty: { type: boolean, nullable: true }
@@ -196,12 +197,24 @@ paths:
         If an If-Match header is sent, the file on disk must still be at that revision, otherwise
         the write is refused with 409 and the file is left untouched — the fresher version wins.
         Omitting If-Match forces an unconditional overwrite.
+        Append-only history guard: the server refuses (409, error=history-loss) any write that
+        drops an existing transaction id or shrinks the auditLog, so history can never be silently
+        erased through the API — archive with a tombstone instead of deleting. A deliberate
+        whole-book replace (import / restore) bypasses the guard with ?replace=1, and the version
+        being overwritten is snapshotted first so even that stays recoverable.
       parameters:
         - in: query
           name: ledger
           required: false
           description: Ledger id to write (from /api/ledgers). Omit for the current ledger; unknown id → 409.
           schema: { type: string }
+        - in: query
+          name: replace
+          required: false
+          description: >
+            Set to "1" to bypass the append-only history guard for a deliberate whole-book replace
+            (import / restore). The overwritten book is snapshotted first. Omit for normal saves.
+          schema: { type: string, enum: ["1"] }
         - in: header
           name: If-Match
           required: false
@@ -219,8 +232,16 @@ paths:
             ETag:
               description: New revision token of the just-written file.
               schema: { type: string, example: '"1b7e3d9a2c4f6058"' }
+        "400":
+          description: Body was not valid JSON (only checked when the history guard runs).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: Conflict — the file on disk is newer than the If-Match revision; not written.
+          description: >
+            Conflict — either the file on disk is newer than the If-Match revision
+            (error=conflict), or the write would drop an existing transaction id or shrink the
+            auditLog (error=history-loss); in both cases the file is left untouched.
           headers:
             ETag:
               description: Current revision on disk (what the client should reconcile against).

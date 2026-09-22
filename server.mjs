@@ -18,11 +18,18 @@ import { homedir } from "os";
 import { dirname, join, basename } from "path";
 import { execSync, execFileSync } from "child_process";
 import { createHash } from "crypto";
+import { fileURLToPath } from "url";
 
 const PROJECT = "personal-wealth-tracker";
 // Single source of truth: the version lives ONLY in index.html's VERSION. Read it once at startup
 // (frozen for this process) so the frontend can detect a stale, not-yet-restarted server.
 const APP_VERSION = (() => { try { const m = readFileSync("index.html", "utf8").match(/const VERSION="(v\d+)"/); return m ? m[1] : "unknown"; } catch { return "unknown"; } })();
+// Robust stale-server detection: hash THIS server file at startup. If the source on disk changes
+// afterwards (any edit, committed or not), /api/version reports stale so the app prompts a restart —
+// far more reliable than the manual VERSION bump, which is easy to forget.
+const SELF = (() => { try { return fileURLToPath(import.meta.url); } catch { return ""; } })();
+const selfHash = () => { try { return createHash("sha256").update(readFileSync(SELF)).digest("hex").slice(0, 16); } catch { return ""; } };
+const START_SELF_HASH = selfHash();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8123;
 const SNAP_KEEP = 300;
 const CONFIG_DIR = process.env.PWT_CONFIG_DIR || join(process.cwd(), ".pwt"); // project-local (git-ignored), not a hidden system folder
@@ -102,6 +109,23 @@ const json = (res, code, obj) => { res.writeHead(code, { "content-type": "applic
 const etagOf = (buf) => '"' + createHash("sha256").update(buf).digest("hex").slice(0, 16) + '"';
 const NULL = Buffer.from("null");
 
+// Append-only history guard. The frontend enforces "never delete, only tombstone" and an
+// append-only auditLog, but that lived only in the browser: a raw PUT /api/book (a hand-rolled
+// API call, a buggy or stale client, a full-overwrite) could silently erase transactions with
+// no trace. This is the server's own backstop — it refuses a write that drops an existing
+// transaction id or shrinks the auditLog. Returns a human reason string, or "" if the write is
+// a legitimate superset. A deliberate whole-book replace (import / restore) bypasses it with
+// ?replace=1 (and a pre-overwrite snapshot is still kept, so even that stays recoverable).
+function historyLoss(prev, next) {
+  const ids = (o) => new Set((o && Array.isArray(o.transactions) ? o.transactions : []).map((t) => t && t.id).filter(Boolean));
+  const before = ids(prev), after = ids(next);
+  const missing = [...before].filter((id) => !after.has(id));
+  if (missing.length) return `Refusing to drop ${missing.length} existing transaction id(s) (e.g. ${missing.slice(0, 3).join(", ")}) — history is append-only, so archive with a tombstone instead of deleting.`;
+  const alen = (o) => (o && Array.isArray(o.auditLog) ? o.auditLog.length : 0);
+  if (alen(next) < alen(prev)) return `Refusing to shrink the audit log from ${alen(prev)} to ${alen(next)} entries — it is append-only.`;
+  return "";
+}
+
 createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
 
@@ -109,8 +133,9 @@ createServer(async (req, res) => {
 
   if (u.pathname === "/api/version") {
     const git = (c) => { try { return execSync("git " + c, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; } };
-    if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { appVersion: APP_VERSION, isRepo: false });
-    return json(res, 200, { appVersion: APP_VERSION, isRepo: true, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), date: git("show -s --format=%cs HEAD"), dirty: git("status --porcelain") !== "" });
+    const stale = START_SELF_HASH !== "" && selfHash() !== START_SELF_HASH;   // server source changed on disk since startup → restart needed
+    if (git("rev-parse --is-inside-work-tree") !== "true") return json(res, 200, { appVersion: APP_VERSION, isRepo: false, stale });
+    return json(res, 200, { appVersion: APP_VERSION, isRepo: true, stale, commit: git("rev-parse --short HEAD"), tag: git("describe --tags --exact-match HEAD"), date: git("show -s --format=%cs HEAD"), dirty: git("status --porcelain") !== "" });
   }
 
   if (u.pathname === "/api/pick") {
@@ -225,6 +250,26 @@ createServer(async (req, res) => {
         }
       }
       const b = await body(req);
+      const replace = u.searchParams.get("replace") === "1";
+      let prevBytes = null;
+      try { prevBytes = await readFile(file); } catch { prevBytes = null; }
+      if (!replace && prevBytes) {
+        let prev = null, next = null;
+        try { prev = JSON.parse(prevBytes); } catch { prev = null; }
+        try { next = JSON.parse(b); } catch {
+          return json(res, 400, { error: "bad-json", message: "Request body is not valid JSON." });
+        }
+        if (prev && typeof prev === "object") {
+          const drop = historyLoss(prev, next);
+          if (drop) {
+            res.writeHead(409, { "content-type": "application/json", "etag": etagOf(prevBytes) });
+            return res.end(JSON.stringify({ error: "history-loss", message: drop + " Pass ?replace=1 only when you mean to replace the whole book (import / restore)." }));
+          }
+        }
+      }
+      // Snapshot the version being overwritten before touching the file, so even a ?replace=1
+      // whole-book replace leaves the pre-replace book recoverable in the snapshots folder.
+      if (replace && prevBytes) await writeSnapshot(prevBytes.toString("utf8"), snap);
       try { await mkdir(dirname(file), { recursive: true }); await writeFile(file, b); } catch (e) { res.writeHead(500); return res.end(String(e)); }
       writeSnapshot(b, snap);
       res.writeHead(204, { "etag": etagOf(Buffer.from(b)) }); return res.end();
