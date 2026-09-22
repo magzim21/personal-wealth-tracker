@@ -324,7 +324,11 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .lpath{display:flex;align-items:center;gap:6px;width:100%;text-align:left;font-family:var(--fs-mono);font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
 .lpath:hover{border-color:var(--accent);color:var(--ink)}
 .lpath .lpicon{flex:none;opacity:.6;display:inline-flex}.lpath .lpicon svg{width:12px;height:12px}
-.lpath .lptext{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* Anchor to the END so the filename shows when it doesn't fit (direction:rtl clips/scrolls from the
+   left); the path is ASCII LTR so it still reads left-to-right. Horizontally scrollable to see the rest. */
+.lpath .lptext{overflow-x:auto;overflow-y:hidden;white-space:nowrap;min-width:0;direction:rtl;scrollbar-width:thin}
+.lpath .lptext::-webkit-scrollbar{height:5px}
+.lpath .lptext::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
 .lcustom{display:inline-flex;align-items:center;gap:6px;margin-left:2px}
 .lcolorin{width:26px;height:26px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:none;cursor:pointer}
 .lcolorin::-webkit-color-swatch-wrapper{padding:2px}.lcolorin::-webkit-color-swatch{border:none;border-radius:50%}
