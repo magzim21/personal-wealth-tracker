@@ -634,7 +634,7 @@ const KEY="ledgerbook.min.v1";
 const VERSION="v59", UPDATED="2026-09-18";
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
-const SCHEMA=4;   // data-shape version. A file with a higher number was written by a newer app → refuse to load. (v4: per-leg frozen USD rate)
+const SCHEMA=5;   // data-shape version. A file with a higher number was written by a newer app → refuse to load. (v5: per-account monetary flag)
                   // v2: each transaction carries an immutable createdAt (booking timestamp), distinct from its (editable) date.
                   // v3: an append-only auditLog of create/edit/delete/restore events, and soft-deleted transactions (tx.deleted).
 const PROJECT="personal-wealth-tracker";
@@ -757,6 +757,10 @@ function normalizeState(){
   // the pivot/vehicle each entry's rates are in (pre-v4 books were always USD-anchored).
   if(S.settings.rates[vehicle()]==null) S.settings.rates[vehicle()]=1;   // the pivot must read as 1.0
   S.transactions.forEach(t=>{ if(t.vehicle==null) t.vehicle="USD"; (t.lines||[]).forEach(l=>{ if(l.rate==null) l.rate=round4(rateUSD(accCur(acctById(l.accountId)))); }); });
+  // v5 backfill: mark each account monetary or not. Monetary = cash-like (revalued by FX; converting realizes
+  // a gain/loss); non-monetary = carried at historical cost (equity, physical assets — no FX gain/loss).
+  // Default by class: equity is non-monetary, assets and liabilities are monetary. Users override the exceptions.
+  S.accounts.forEach(a=>{ if(a.monetary==null) a.monetary=(classOf(a)!=="equity"); });
   S.schemaVersion=SCHEMA;   // stamp the data-shape version this app writes
 }
 // append-only audit log: never rewrite past entries, only add.
@@ -1524,8 +1528,8 @@ function doImport(text){
 /* ---- account modal ---- */
 function acctModal(existing,presetTypeId){
   let draft;
-  if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset",comment:existing.comment||""}; }
-  else { const pt=presetTypeId?typeById(presetTypeId):null; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:(pt&&pt.class)||"asset",comment:""}; }
+  if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset",comment:existing.comment||"",monetary:existing.monetary!=null?existing.monetary:((t&&t.class)!=="equity")}; }
+  else { const pt=presetTypeId?typeById(presetTypeId):null; const c=(pt&&pt.class)||"asset"; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:c,comment:"",monetary:c!=="equity"}; }
   UI.modal={kind:"acct",id:existing?existing.id:null,draft};
   renderModal();
 }
@@ -1583,12 +1587,17 @@ function renderModal(){
         </div>
         <label class="field" id="ac-newtype-wrap" style="${a.typeId==="__new"?"":"display:none"}"><span>New type name</span><input type="text" id="ac-newtype" placeholder="e.g. Bank"></label>
         <label class="field"><span>Currency</span>${curField("ac-cur",a.currency)}</label>
+        <div class="field"><span>Kind <span class="infodot" data-tip="Monetary = cash-like money whose worth is fixed in its own currency (bank balances, loans, receivables). It's revalued as rates move, and converting its currency realizes an FX gain or loss. Non-monetary = carried at historical cost (equity, and physical things like a car or camera) — not revalued for FX, and converting its currency just re-states it at the same value, no gain or loss. Defaults from the class (equity → non-monetary, assets & liabilities → monetary); change it only for exceptions like a physical asset.">&#9432;</span></span>
+          <div class="themeseg" role="group" aria-label="Account kind" id="ac-monetary">${[[true,"Monetary"],[false,"Non-monetary"]].map(([k,l])=>`<button type="button" class="${a.monetary===k?"on":""}" data-mon="${k}">${l}</button>`).join("")}</div></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ac-comment" rows="2" placeholder="Notes about this account">${esc(a.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-acct">Save</button></div>
     </div></div>`;
     const cs=document.getElementById("ac-class"), tsel=document.getElementById("ac-type");
-    cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; });
+    const monseg=document.getElementById("ac-monetary");
+    const paintMon=()=>monseg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",(b.dataset.mon==="true")===a.monetary));
+    monseg.addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; a.monetary=(b.dataset.mon==="true"); paintMon(); });
+    cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; a.monetary=(a.cls!=="equity"); paintMon(); });   // reset the monetary default to match the new class
     tsel.addEventListener("change",()=>{ a.typeId=tsel.value; document.getElementById("ac-newtype-wrap").style.display=(tsel.value==="__new")?"":"none"; });
     setTimeout(()=>document.getElementById("ac-name")?.focus(),30);
   } else if(UI.modal.kind==="type"){
@@ -2379,8 +2388,9 @@ function saveAcct(){
   const dup=S.accounts.some(a=>a.typeId===typeId && a.id!==UI.modal.id && (a.name||"").trim().toLowerCase()===name.toLowerCase());
   if(dup){ toast(`“${name}” already exists in this type — pick a different name.`); return; }
   if(S.settings.rates[currency]==null) S.settings.rates[currency]=1;
-  if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; acc.comment=comment; }
-  else S.accounts.push({id:uid(),name,typeId,currency,comment});
+  const monetary=!!(UI.modal.draft&&UI.modal.draft.monetary);
+  if(UI.modal.id){ const acc=acctById(UI.modal.id); acc.name=name; acc.typeId=typeId; acc.currency=currency; acc.comment=comment; acc.monetary=monetary; }
+  else S.accounts.push({id:uid(),name,typeId,currency,comment,monetary});
   save();render();dismissModal();
 }
 function delAccount(id){
