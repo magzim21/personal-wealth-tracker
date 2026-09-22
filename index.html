@@ -2496,6 +2496,14 @@ function syncLines(){
 // when a new currency first appears — real FX is never a round 1. Flag it so the user isn't fooled
 // by a fake "balanced".
 function rateLooksUnset(c){ return c!==vehicle() && c!==base() && rateUSD(c)===1; }
+// Format one value in the cross-currency chain: <narrow symbol><grouped amount, its own decimals> <CODE>,
+// e.g. "$628.24 CAD", "$448 USD", "20,000 UAH". The narrow symbol keeps it "$" not "CA$" (the code
+// disambiguates), and fmtGroup keeps the amount's real cents instead of money()'s rounded whole units.
+function chainAmt(v,cur){
+  let sym=""; try{ const p=new Intl.NumberFormat("en",{style:"currency",currency:cur,currencyDisplay:"narrowSymbol"}).formatToParts(0).find(x=>x.type==="currency"); sym=p?p.value:""; }catch(_){}
+  if(sym===cur) sym="";   // no distinct symbol for this currency -> don't repeat the code
+  return esc(sym)+fmtGroup(round2(v))+" "+esc(cur);
+}
 function updateBal(){
   const d=UI.modal.draft;
   const curs=[...new Set(d.lines.map(l=>{const a=acctById(l.accountId);return a?accCur(a):null;}).filter(Boolean))];
@@ -2520,8 +2528,8 @@ function updateBal(){
     const ls=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0)));
     const amtOf=l=>(l.debit||0)||(l.credit||0), curOf=l=>accCur(acctById(l.accountId));
     const chain = ls.length===2
-      ? `<b>${fmtGroup(amtOf(ls[0]))} ${esc(curOf(ls[0]))}</b> &rarr; ${money(convert(amtOf(ls[0]),curOf(ls[0]),veh),veh)} &rarr; <b>${fmtGroup(amtOf(ls[1]))} ${esc(curOf(ls[1]))}</b>`
-      : ls.map(l=>`<b>${fmtGroup(amtOf(l))} ${esc(curOf(l))}</b> &rarr; ${money(convert(amtOf(l),curOf(l),veh),veh)}`).join("<br>");
+      ? `<b>${chainAmt(amtOf(ls[0]),curOf(ls[0]))}</b> &rarr; ${chainAmt(convert(amtOf(ls[0]),curOf(ls[0]),veh),veh)} &rarr; <b>${chainAmt(amtOf(ls[1]),curOf(ls[1]))}</b>`
+      : ls.map(l=>`<b>${chainAmt(amtOf(l),curOf(l))}</b> &rarr; ${chainAmt(convert(amtOf(l),curOf(l),veh),veh)}`).join("<br>");
     const nonVeh=curs.filter(c=>c!==veh);
     const between = nonVeh.length===2 ? `direct ${esc(nonVeh[0])} &harr; ${esc(nonVeh[1])} rate` : `direct rate among ${nonVeh.map(esc).join(", ")}`;
     const lead = nonVeh.length>=2
