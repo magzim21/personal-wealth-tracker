@@ -1540,7 +1540,9 @@ function acctModal(existing,presetTypeId){
   let draft;
   if(existing){ const t=typeById(existing.typeId); draft={name:existing.name,typeId:existing.typeId,currency:accCur(existing),cls:(t&&t.class)||"asset",comment:existing.comment||"",monetary:existing.monetary!=null?existing.monetary:((t&&t.class)!=="equity")}; }
   else { const pt=presetTypeId?typeById(presetTypeId):null; const c=(pt&&pt.class)||"asset"; draft={name:"",typeId:presetTypeId||"",currency:base(),cls:c,comment:"",monetary:c!=="equity"}; }
-  UI.modal={kind:"acct",id:existing?existing.id:null,draft};
+  // snapshot of the saved state, to keep Save disabled until something actually changes
+  const orig=existing?{name:draft.name,typeId:draft.typeId,currency:draft.currency,comment:draft.comment,monetary:draft.monetary}:null;
+  UI.modal={kind:"acct",id:existing?existing.id:null,draft,orig};
   renderModal();
 }
 /* ---- transaction modal ---- */
@@ -1610,9 +1612,11 @@ function renderModal(){
     const cs=document.getElementById("ac-class"), tsel=document.getElementById("ac-type");
     const monseg=document.getElementById("ac-monetary");
     const paintMon=()=>monseg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",(b.dataset.mon==="true")===a.monetary));
-    monseg.addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; a.monetary=(b.dataset.mon==="true"); paintMon(); });
-    cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; a.monetary=(a.cls!=="equity"); paintMon(); });   // reset the monetary default to match the new class
-    tsel.addEventListener("change",()=>{ a.typeId=tsel.value; document.getElementById("ac-newtype-wrap").style.display=(tsel.value==="__new")?"":"none"; });
+    monseg.addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; a.monetary=(b.dataset.mon==="true"); paintMon(); refreshAcctSave(); });
+    cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; a.monetary=(a.cls!=="equity"); paintMon(); refreshAcctSave(); });   // reset the monetary default to match the new class
+    tsel.addEventListener("change",()=>{ a.typeId=tsel.value; document.getElementById("ac-newtype-wrap").style.display=(tsel.value==="__new")?"":"none"; refreshAcctSave(); });
+    ["ac-name","ac-comment","ac-newtype"].forEach(id=>document.getElementById(id)?.addEventListener("input",refreshAcctSave));
+    refreshAcctSave();
     setTimeout(()=>document.getElementById("ac-name")?.focus(),30);
   } else if(UI.modal.kind==="convert"){
     const acc=acctById(UI.modal.id), src=accCur(acc), d=UI.modal.draft;
@@ -2414,6 +2418,22 @@ async function fetchRates(){
   save(); renderModal(); render();
 }
 
+// Save stays disabled on an existing account until an editable field differs from what's on file.
+function acctDraftDirty(){
+  if(!UI.modal||UI.modal.kind!=="acct") return false;
+  if(!UI.modal.id) return true;                      // a new account is always "unsaved"
+  const o=UI.modal.orig; if(!o) return true;
+  const g=id=>document.getElementById(id);
+  const name=(g("ac-name")?.value||"").trim();
+  const typeId=g("ac-type")?.value;
+  const newtype=(g("ac-newtype")?.value||"").trim();
+  const currency=g("ac-cur")?.value;
+  const comment=(g("ac-comment")?.value||"").trim();
+  const monetary=!!(UI.modal.draft&&UI.modal.draft.monetary);
+  return name!==o.name || currency!==o.currency || comment!==(o.comment||"") || monetary!==o.monetary
+    || typeId!==o.typeId || (typeId==="__new" && !!newtype);
+}
+function refreshAcctSave(){ const btn=document.querySelector('.modal [data-action="save-acct"]'); if(btn) btn.disabled=!acctDraftDirty(); }
 function saveAcct(){
   const name=document.getElementById("ac-name").value.trim();
   if(!name){ const el=document.getElementById("ac-name"); if(el){el.classList.add("invalid");el.focus();} toast("Give the account a name."); return; }
