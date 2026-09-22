@@ -1072,7 +1072,8 @@ function viewAccounts(){
     out+=`<div class="groupwrap cls-${ck}"><div class="grouphead"><h3>${cl}</h3><span class="ghright"><span class="total">${cnt(classTotalBase(ck),base(),'class:'+ck)}</span><button class="iconbtn" data-action="new-type" data-class="${ck}" title="Add ${esc(cl)} type">${I.plus}</button></span></div>`;
     if(!types.length) out+=`<div class="arow acct"><span class="name muted" style="font-size:12.5px">No types yet — use + to add one</span><span></span></div>`;
     types.forEach(t=>{
-      const accts=accountsInType(t.id).slice().sort((a,b)=>a.name.localeCompare(b.name));
+      // accounts ordered by size (value in the base currency), high → low; name breaks ties — same as types/classes
+      const accts=accountsInType(t.id).slice().sort((a,b)=>(Math.abs(toBase(balance(b.id),accCur(b)))-Math.abs(toBase(balance(a.id),accCur(a))))||a.name.localeCompare(b.name));
       const collapsed=!!UI.collapsed[t.id];
       out+=`<div class="typehead${collapsed?' collapsed':''}">
         <button class="iconbtn chev" data-action="toggle-type" data-id="${t.id}" title="${collapsed?'Expand':'Collapse'}" aria-expanded="${!collapsed}">${I.chev}</button>
