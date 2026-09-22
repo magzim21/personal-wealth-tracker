@@ -311,6 +311,27 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .stdrow-badge.mon{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-ink)}
 .stdrow-badge.non{background:var(--surface-2);color:var(--muted)}
 .stdrow-desc{font-size:11.5px;color:var(--faint)}
+.brandtext{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ledgername{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:2px 0 0;margin:0;cursor:pointer;font:inherit;color:var(--muted);max-width:100%}
+.ledgername:hover{color:var(--ink)}
+.ledgername .ldot{width:9px;height:9px;border-radius:50%;background:var(--lc);flex:none}
+.ledgername .lname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ledgername .lchev{opacity:.6;display:inline-flex}.ledgername .lchev svg{width:12px;height:12px}
+.ldglist{display:flex;flex-direction:column;gap:6px}
+.ldgrow{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.ldgrow.cur{border-color:var(--accent);background:var(--accent-soft)}
+.lswatch{width:20px;height:20px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong);cursor:pointer;flex:none;padding:0}
+.lrename{flex:1;min-width:0;border:1px solid transparent;background:none;font:inherit;font-weight:600;font-size:14px;color:var(--ink);padding:4px 6px;border-radius:6px}
+.lrename:hover{border-color:var(--line)}
+.lrename:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.lcurbadge{font-size:10.5px;font-weight:600;color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 16%,transparent);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.lpalette{display:flex;flex-wrap:wrap;gap:7px;padding:8px 9px 2px}
+.lsw{width:22px;height:22px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong);cursor:pointer;padding:0}
+.lsw.on{box-shadow:0 0 0 2px var(--accent)}
+.lsw:disabled{opacity:.28;cursor:not-allowed}
+.lnewrow{display:flex;gap:8px;margin-top:4px}
+.lnewrow input{flex:1}
+.iconbtn.danger:hover{color:var(--neg)}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -923,7 +944,8 @@ function render(){
   document.getElementById("app").innerHTML=`
   <div class="app${UI.privacy?" privacy":""}${railOn()?" has-rail":""}${(railOn()&&UI.railCollapsed)?" rail-collapsed":""}${S.settings.density==="compact"?" dense":""}">
     <aside class="side">
-      <div class="brand" data-action="go-home" role="button" tabindex="0" title="Home"><div class="mark">${I.coin}</div><h1>Ledgerbook</h1></div>
+      <div class="brand" data-action="go-home" role="button" tabindex="0" title="Home"><div class="mark">${I.coin}</div>
+        <div class="brandtext"><h1>Ledgerbook</h1>${(LEDGERS&&LEDGERS.ledgers)?`<button class="ledgername" data-action="ledger-menu" title="Switch or manage ledgers" style="--lc:${esc((curLedger()||{}).color||"var(--accent)")}"><span class="ldot"></span><span class="lname">${esc((curLedger()||{}).name||"Ledger")}</span><span class="lchev">${I.chev}</span></button>`:""}</div></div>
       <nav class="nav${["dashboard","about"].includes(UI.view)?" more-open":""}">
         ${(()=>{ const item=([v,l])=>{ const isHome=(UI.homeView||"accounts")===v;
             return `<div class="navitem">
@@ -1474,6 +1496,38 @@ async function saveFile(filename,data){
   if(box){ box.style.display="block"; box.value=data; box.focus(); box.select(); }
   else { toast("Couldn't save the file here."); }
 }
+/* ---- ledgers (multi-book registry; server-backed, degrades to single-ledger on an old server) ---- */
+let LEDGERS=null;
+async function loadLedgers(){ try{ const r=await fetch("/api/ledgers",{cache:"no-store"}); LEDGERS = r.ok ? await r.json() : null; }catch(e){ LEDGERS=null; } }
+const curLedger=()=> (LEDGERS&&LEDGERS.ledgers) ? (LEDGERS.ledgers.find(l=>l.current)||LEDGERS.ledgers[0]) : null;
+// Reload the current ledger's book into S — the load half of boot(), reused when switching.
+async function reloadBook(){
+  let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
+  if(loaded && Number(loaded.schemaVersion)>SCHEMA){ renderSchemaBlock(Number(loaded.schemaVersion)); return false; }
+  S = loaded ? migrate(loaded) : seed();
+  normalizeState(); loadUIPrefs(); applyTheme(); applyFont();
+  STORE.save(S,"silent");
+  return true;
+}
+async function switchLedger(id){
+  if(curLedger()&&curLedger().id===id){ dismissModal(); return; }
+  try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({op:"switch",id})}); if(!r.ok) throw 0; }
+  catch(e){ toast("Couldn't switch ledger."); return; }
+  const ok=await reloadBook(); await loadLedgers();
+  dismissModal(); if(ok){ render(); toast("Now on “"+((curLedger()||{}).name||"ledger")+"”"); }
+}
+async function createLedger(name){
+  const nm=(name||"").trim(); if(!nm){ toast("Name the new ledger."); return; }
+  try{ const r=await fetch("/api/ledgers",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:nm})}); if(!r.ok) throw 0; }
+  catch(e){ toast("Couldn't create the ledger."); return; }
+  await reloadBook(); await loadLedgers(); render(); renderModal(); toast("Created “"+nm+"”");
+}
+async function ledgerOp(op,id,extra){
+  try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(Object.assign({op,id},extra||{}))});
+    if(r.status===409){ toast("That colour is already used by another ledger."); return false; } if(!r.ok) throw 0; }
+  catch(e){ toast("Couldn't update the ledger."); return false; }
+  await loadLedgers(); return true;
+}
 /* ---- storage location (desktop/local-server only) ---- */
 let LOC=null;
 async function loadLocationInfo(){
@@ -1688,6 +1742,27 @@ function renderModal(){
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="convert-confirm" ${c.ok?"":"disabled"}>Convert</button></div>
     </div></div>`;
+  } else if(UI.modal.kind==="ledgers"){
+    const L=LEDGERS||{ledgers:[],palette:[],usedColors:[]};
+    const openC=UI.modal.colorFor;
+    const row=l=>`<div class="ldgrow${l.current?" cur":""}">
+        <button class="lswatch" data-action="ledger-color-open" data-id="${l.id}" style="background:${esc(l.color)}" title="Change colour" aria-label="Change colour"></button>
+        <input class="lrename" data-id="${l.id}" value="${escAttr(l.name)}" aria-label="Ledger name" spellcheck="false">
+        ${l.current?`<span class="lcurbadge">Current</span>`:`<button class="btn sm" data-action="ledger-switch" data-id="${l.id}">Open</button>`}
+        <button class="iconbtn danger" data-action="ledger-remove" data-id="${l.id}" title="Remove from list"${(L.ledgers||[]).length<2?" disabled":""}>${I.trash}</button>
+      </div>${openC===l.id?`<div class="lpalette">${(L.palette||[]).map(c=>{ const taken=(L.usedColors||[]).includes(c)&&l.color!==c; return `<button class="lsw${l.color===c?" on":""}" data-action="ledger-color-pick" data-id="${l.id}" data-color="${esc(c)}" style="background:${esc(c)}"${taken?" disabled":""} title="${taken?"Used by another ledger":esc(c)}"></button>`; }).join("")}</div>`:""}`;
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:470px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>Ledgers</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <p class="muted" style="font-size:12.5px;margin:0">Each ledger is its own book — its own accounts, entries, currency, theme and font. New ones are created in <code style="font-size:11px">${esc(L.ledgersRoot||"")}</code>.</p>
+        <div class="ldglist">${(L.ledgers||[]).map(row).join("")}</div>
+        <div class="lnewrow"><input type="text" id="lnew-name" placeholder="New ledger name" spellcheck="false"><button class="btn primary sm" data-action="ledger-new">＋ Create</button></div>
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
+    </div></div>`;
+    root.querySelectorAll(".lrename").forEach(inp=>{ const commit=()=>{ const v=inp.value.trim(), id=inp.dataset.id, l=(L.ledgers||[]).find(x=>x.id===id); if(l&&v&&v!==l.name){ ledgerOp("rename",id,{name:v}).then(ok=>{ if(ok){ render(); renderModal(); } }); } };
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } }); inp.addEventListener("blur",commit); });
+    const nn=document.getElementById("lnew-name"); if(nn) nn.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); createLedger(nn.value); } });
   } else if(UI.modal.kind==="type"){
     const t=UI.modal.draft;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:400px" role="dialog" aria-modal="true">
@@ -2241,6 +2316,12 @@ document.addEventListener("click",e=>{
     case "convert-open": { const acc=acctById(UI.modal.id); const tgt=(base()!==accCur(acc)?base():(accCur(acc)!=="USD"?"USD":"EUR")); UI.modal={kind:"convert",id:UI.modal.id,draft:{target:tgt,monetary:!!acc.monetary}}; renderModal(); break; }
     case "convert-mode": if(UI.modal&&UI.modal.draft){ UI.modal.draft.monetary=(el.dataset.mon==="true"); renderModal(); } break;
     case "convert-confirm": applyConversion(); break;
+    case "ledger-menu": UI.modal={kind:"ledgers",colorFor:null}; renderModal(); break;
+    case "ledger-switch": switchLedger(id); break;
+    case "ledger-new": createLedger(document.getElementById("lnew-name")?.value); break;
+    case "ledger-color-open": UI.modal.colorFor=(UI.modal.colorFor===id?null:id); renderModal(); break;
+    case "ledger-color-pick": ledgerOp("color",id,{color:el.dataset.color}).then(ok=>{ if(ok){ UI.modal.colorFor=null; render(); renderModal(); } }); break;
+    case "ledger-remove": askConfirm("Remove this ledger from the list? Its file stays on disk — you can add it back later via the storage location.", ()=>{ ledgerOp("remove",id).then(async ok=>{ if(ok){ await reloadBook(); render(); renderModal(); toast("Removed from the list."); } }); }); break;
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
@@ -2923,6 +3004,7 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
   applyTheme();
   applyFont();
   if(STORE===FILE_STORE){
+    await loadLedgers();   // multi-book registry (null on an old server → single-ledger look, until they restart)
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
     if(!GITINFO || GITINFO.appVersion!==VERSION){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null}; }  // frontend/backend mismatch → prompt restart
   }
