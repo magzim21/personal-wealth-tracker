@@ -52,6 +52,10 @@ jobs:
       - name: Embedded server copies in sync
         run: node scripts/sync-embedded.mjs --check
 
+      # 2b3. the online demo's in-browser server (demo-sw.js) must answer /api like server.mjs
+      - name: Demo server matches server.mjs
+        run: node scripts/test-demo-api.mjs
+
       # 2c. AI feature must never be able to send figures to the model
       - name: AI redaction gates intact
         run: node scripts/check-ai-redaction.mjs
@@ -100,6 +104,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html _site/index.html
+          cp demo-sw.js _site/demo-sw.js
           echo "personal-wealth-tracker.maxim.run" > _site/CNAME
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

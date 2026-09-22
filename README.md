@@ -150,27 +150,36 @@ writes are gated by an ETag/`If-Match` check so a stale tab can't clobber a fres
 ## About the online demo
 
 The **[live demo](https://personal-wealth-tracker.maxim.run/)** (GitHub Pages) is there so
-you can try Ledgerbook instantly. It's the same app, but with no local server it stores
-everything in your **browser's local storage** — so the data is still only on your device,
-it just isn't a portable file and isn't shared anywhere. For real use, run it locally so
-your books live in a file you control and get automatic snapshots.
+you can try Ledgerbook instantly. GitHub Pages can't run a server, so the demo brings its own:
+[`demo-sw.js`](demo-sw.js) is a **service worker** (a script the browser runs in the background
+for this site) that answers the same `/api/*` routes as `server.mjs`, over a small **demo file
+system kept in the browser's storage (IndexedDB)**. Nothing is uploaded — the data never leaves
+your browser.
 
-The demo marks itself with a small **"browser-only demo"** chip under the version line.
-Compared with the local (server) version it has no:
+So the demo behaves like the local version: several ledgers and the switcher, a snapshot on
+every save, the history guard, and a folder/file picker — an in-app one over the demo file
+system (folders like *iCloud Drive*, *Documents*, *Desktop*), since a web page can't open
+Finder. It marks itself with a small **"demo · data stays in this browser"** chip under the
+version line. What it still can't do:
 
-- ledger **file** on disk (iCloud Drive or any folder) — data is in browser storage only;
-- **snapshots** on every save;
-- **multiple ledgers** and the ledger switcher;
-- native **folder/file picker**;
-- server-side **history guard** (refuses a write that would erase transactions or audit log);
-- real **git version** in the header (the demo shows the version stamped into the file);
-- **Twelve Data** rates through your own key (the demo uses a free fiat-only source).
+- keep your ledger as a real **file on your disk** or sync it through iCloud;
+- show the real **git version** in the header (it shows the version stamped into the file);
+- fetch **Twelve Data** rates through your own key (it uses a free fiat-only source).
+
+Clearing the site's data in your browser erases the demo books — use **Export** to keep a copy.
+A book you kept in the older browser-only demo is moved into the demo file system on the first
+visit (the old copy is left in place).
+
+The worker only starts where there's no real server, over HTTPS, and never on `localhost`
+(so it can't shadow your actual books) unless you add `?demo` to the URL; `?demo=off` removes
+it. In a browser without service workers (or a sandboxed preview) the app falls back to plain
+browser storage and says so with a **"browser-only mode"** chip. `scripts/test-demo-api.mjs`
+replays the same API scenario against `server.mjs` and the worker and fails CI if they drift.
 
 ## Roadmap
 
-- **Server for the online demo.** Give the public demo a backend so it shows the full
-  app — ledger switcher, snapshots, file picking — against a sandboxed, throwaway
-  per-visitor workspace, instead of the browser-only subset.
+- **Keep books in a real folder from the browser** (File System Access API, Chrome/Edge):
+  the demo server writing to a folder you pick on disk, instead of browser storage.
 
 ## Privacy & security
 

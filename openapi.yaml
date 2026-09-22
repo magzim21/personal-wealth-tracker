@@ -42,6 +42,7 @@ paths:
                   commit: { type: string, nullable: true, example: "195f229" }
                   tag: { type: string, nullable: true, example: "v1.11.0" }
                   dirty: { type: boolean, nullable: true }
+                  demo: { type: boolean, description: "Only the in-browser demo server (demo-sw.js) sends this, as true. Not sent by server.mjs / server.go." }
 
   /api/location:
     get:
