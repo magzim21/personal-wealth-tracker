@@ -359,7 +359,7 @@ func main() {
 			}
 			writeJSON(w, 200, map[string]any{"ledgersRoot": cfg.LedgersRoot, "current": cfg.Current, "palette": palette, "usedColors": used, "ledgers": led})
 		case http.MethodPost:
-			var o struct{ Name, Color string }
+			var o struct{ Name, Color, Dir string }
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &o)
 			name := strings.TrimSpace(o.Name)
@@ -378,6 +378,9 @@ func main() {
 				color = nextColor(cfg.Ledgers)
 			}
 			root := cfg.LedgersRoot
+			if o.Dir != "" && strings.HasPrefix(o.Dir, "/") { // caller may pick a target folder
+				root = o.Dir
+			}
 			bn := slug(name)
 			p := filepath.Join(root, bn+".json")
 			for n := 1; ; n++ {

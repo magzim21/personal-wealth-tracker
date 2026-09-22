@@ -127,7 +127,8 @@ createServer(async (req, res) => {
       let color = o.color;
       if (color) { if (cfg.ledgers.some((l) => l.color === color)) return json(res, 409, { error: "That colour is already used by another ledger." }); }
       else color = nextColor(cfg.ledgers);
-      const root = cfg.ledgersRoot; let bn = slug(name), path = join(root, bn + ".json"), n = 1;
+      const root = (o.dir && String(o.dir).startsWith("/")) ? String(o.dir) : cfg.ledgersRoot; // caller may pick a target folder
+      let bn = slug(name), path = join(root, bn + ".json"), n = 1;
       while (cfg.ledgers.some((l) => l.path === path) || existsSync(path)) path = join(root, bn + "-" + (++n) + ".json");
       try { await mkdir(dirname(path), { recursive: true }); if (!existsSync(path)) await writeFile(path, "null"); } catch (e) { return json(res, 500, { error: String(e) }); }
       const e = { id: uid(), name, path, snapshotDir: join(root, "snapshots", basename(path, ".json")), color, lastOpened: Date.now() };

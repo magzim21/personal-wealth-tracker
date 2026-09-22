@@ -114,6 +114,7 @@ paths:
               properties:
                 name: { type: string, example: "Business" }
                 color: { type: string, description: Optional; must be unused, else 409 }
+                dir: { type: string, description: Optional absolute folder to create the ledger in; defaults to ledgersRoot }
       responses:
         "200":
           description: Created and switched
