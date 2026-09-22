@@ -224,6 +224,8 @@ input[type=text]:focus,input[type=date]:focus,input[type=number]:focus,select:fo
 .mainhead .grow{flex:1}
 .ver{font-family:var(--fs-mono);font-size:11.5px;color:var(--faint);text-align:right;line-height:1.5}
 .warn-badge{display:inline-block;font-family:var(--fs-sans);font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#f4d774;color:#5c4400;white-space:nowrap}
+.modechip{cursor:help;font-family:var(--fs-sans);font-size:11px;color:var(--faint);white-space:nowrap}
+.modechip .infodot{width:12px;height:12px;font-size:9px;margin-left:2px}
 .warn-badge.crit{background:var(--neg);color:#fff}
 .warnbanner{margin:14px clamp(16px,3vw,28px) 0;border:1px solid #e6c65a;border-radius:var(--r-sm);overflow:hidden;box-shadow:var(--shadow)}
 .wbrow{background:#fbeec2;color:#5c4400;padding:9px 14px;font-size:12.5px;line-height:1.45}
@@ -792,6 +794,8 @@ let STORE=LS_STORE, saveT=null;
 // The file on disk changed under us (another tab, machine, or the API). Don't silently lose the
 // live edit — ask the user (mirrors the version-mismatch modal).
 function onSaveConflict(){ if(UI.modal && UI.modal.kind==="conflict") return; UI.modal={kind:"conflict"}; renderModal(); }
+// Shown (as a quiet chip in the header) only when no local server answered — i.e. the online demo.
+const BROWSER_ONLY_TIP="Browser-only demo: no server behind this page. Your data lives in this browser's local storage, on this device only.\n\nThe local version (node server.mjs / go run server.go) adds:\n• your ledger as a plain JSON file you own (iCloud or any folder)\n• a snapshot on every save\n• several ledgers and a switcher\n• a native folder/file picker\n• a server-side guard that refuses writes erasing history\n• the real git version in this line\n• rates via your own Twelve Data key (here: free fiat rates only)";
 async function pickStore(){ try{ const r=await fetch("/api/ping",{cache:"no-store"}); if(r.ok) return FILE_STORE; }catch(e){} return LS_STORE; }
 function save(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(STORE&&S) STORE.save(S); },250); }
 
@@ -1032,7 +1036,7 @@ function render(){
       <div class="mainhead">
         <h2>${UI.view==="account"?esc((acctById(UI.accountId)||{}).name||"Account"):UI.view==="dashboard"?"Dashboard":UI.view==="about"?"About":UI.view==="accounts"?"Accounts":"Ledger"}</h2>
         <div class="grow"></div>
-        <span class="ver">${(()=>{const vi=verInfo();return `${VERSION} · ${vi.label} · ${vi.date}${vi.committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${vi.migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}`;})()}</span>
+        <span class="ver">${(()=>{const vi=verInfo();return `${VERSION} · ${vi.label} · ${vi.date}${vi.committed?"":` <span class="warn-badge">⚠ uncommitted changes</span>`}${vi.migration?` <span class="warn-badge crit">⛔ uncommitted migration</span>`:""}${STORE===LS_STORE?`<br><span class="modechip" data-tip="${escAttr(BROWSER_ONLY_TIP)}">browser-only demo <span class="infodot">&#9432;</span></span>`:""}`;})()}</span>
         <button class="btn sm privbtn${UI.privacy?" on":""}" data-action="toggle-privacy" data-tip="Privacy Mode — blur every amount for screen-sharing. With it on, click any number to reveal just that one.">${UI.privacy?I.eyeoff:I.eye}<span>Privacy</span></button>
         ${UI.view==="about"?"":`<button class="btn primary" data-action="new-tx">${I.plus}New transaction</button>`}
       </div>

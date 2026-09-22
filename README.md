@@ -155,6 +155,23 @@ everything in your **browser's local storage** — so the data is still only on 
 it just isn't a portable file and isn't shared anywhere. For real use, run it locally so
 your books live in a file you control and get automatic snapshots.
 
+The demo marks itself with a small **"browser-only demo"** chip under the version line.
+Compared with the local (server) version it has no:
+
+- ledger **file** on disk (iCloud Drive or any folder) — data is in browser storage only;
+- **snapshots** on every save;
+- **multiple ledgers** and the ledger switcher;
+- native **folder/file picker**;
+- server-side **history guard** (refuses a write that would erase transactions or audit log);
+- real **git version** in the header (the demo shows the version stamped into the file);
+- **Twelve Data** rates through your own key (the demo uses a free fiat-only source).
+
+## Roadmap
+
+- **Server for the online demo.** Give the public demo a backend so it shows the full
+  app — ledger switcher, snapshots, file picking — against a sandboxed, throwaway
+  per-visitor workspace, instead of the browser-only subset.
+
 ## Privacy & security
 
 Everything that keeps your numbers on your machine, in one place:
