@@ -10,7 +10,7 @@
 //   snapshot override: $SNAPSHOT_DIR  (applies to the current ledger)
 // A snapshot is written on every save (deduped; newest SNAP_KEEP retained).
 import { createServer } from "http";
-import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
+import { readFile, writeFile, mkdir, readdir, unlink, rm } from "fs/promises";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join, basename } from "path";
@@ -143,10 +143,13 @@ createServer(async (req, res) => {
       if (o.op === "color") { if (!e) return json(res, 404, { error: "no such ledger" }); if (cfg.ledgers.some((l) => l.id !== e.id && l.color === o.color)) return json(res, 409, { error: "That colour is already used by another ledger." }); e.color = o.color; await saveConfig(cfg); return json(res, 200, { ok: true }); }
       if (o.op === "remove") {
         if (!e) return json(res, 404, { error: "no such ledger" });
-        cfg.ledgers = cfg.ledgers.filter((l) => l.id !== e.id); // unregister only — the file on disk is left untouched
+        const snapToDel = (o.snapshots && e.snapshotDir) ? e.snapshotDir : null; // opt-in: delete THIS ledger's snapshots (the ledger file itself always stays)
+        cfg.ledgers = cfg.ledgers.filter((l) => l.id !== e.id); // unregister — the file on disk is left untouched
         if (!cfg.ledgers.length) { const id = uid(), path = join(cfg.ledgersRoot, "ledger.json"); cfg.ledgers = [{ id, name: "My ledger", path, snapshotDir: join(cfg.ledgersRoot, "snapshots", "ledger"), color: PALETTE[0] }]; cfg.current = id; try { await mkdir(dirname(path), { recursive: true }); if (!existsSync(path)) await writeFile(path, "null"); } catch {} }
         else if (cfg.current === e.id) cfg.current = cfg.ledgers[0].id;
-        await saveConfig(cfg); useCurrent(); return json(res, 200, { ok: true, current: cfg.current });
+        await saveConfig(cfg); useCurrent();
+        if (snapToDel) { try { await rm(snapToDel, { recursive: true, force: true }); } catch {} }
+        return json(res, 200, { ok: true, current: cfg.current });
       }
       return json(res, 400, { error: "unknown op" });
     }

@@ -409,7 +409,10 @@ func main() {
 			useCurrent()
 			writeJSON(w, 200, map[string]any{"ok": true, "id": e.ID, "current": cfg.Current})
 		case http.MethodPut:
-			var o struct{ Op, ID, Name, Color string }
+			var o struct {
+				Op, ID, Name, Color string
+				Snapshots           bool
+			}
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &o)
 			find := func(id string) *ledgerEntry {
@@ -462,7 +465,11 @@ func main() {
 					return
 				}
 				removedID := e.ID
-				kept := cfg.Ledgers[:0]
+				snapToDel := ""
+				if o.Snapshots && e.SnapshotDir != "" { // opt-in: delete THIS ledger's snapshots (the ledger file always stays)
+					snapToDel = e.SnapshotDir
+				}
+				kept := make([]ledgerEntry, 0, len(cfg.Ledgers))
 				for _, l := range cfg.Ledgers {
 					if l.ID != removedID {
 						kept = append(kept, l)
@@ -483,6 +490,9 @@ func main() {
 				}
 				_ = saveConfig(cfg)
 				useCurrent()
+				if snapToDel != "" {
+					_ = os.RemoveAll(snapToDel)
+				}
 				writeJSON(w, 200, map[string]any{"ok": true, "current": cfg.Current})
 			default:
 				writeJSON(w, 400, map[string]string{"error": "unknown op"})
