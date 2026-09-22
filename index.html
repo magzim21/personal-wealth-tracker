@@ -326,9 +326,8 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .lpath .lpicon{flex:none;opacity:.6;display:inline-flex}.lpath .lpicon svg{width:12px;height:12px}
 /* Anchor to the END so the filename shows when it doesn't fit (direction:rtl clips/scrolls from the
    left); the path is ASCII LTR so it still reads left-to-right. Horizontally scrollable to see the rest. */
-.lpath .lptext{overflow-x:auto;overflow-y:hidden;white-space:nowrap;min-width:0;direction:rtl;scrollbar-width:thin}
-.lpath .lptext::-webkit-scrollbar{height:5px}
-.lpath .lptext::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+.lpath .lptext{overflow-x:auto;overflow-y:hidden;white-space:nowrap;min-width:0;scrollbar-width:none;-ms-overflow-style:none}
+.lpath .lptext::-webkit-scrollbar{display:none}
 .lcustom{display:inline-flex;align-items:center;gap:6px;margin-left:2px}
 .lcolorin{width:26px;height:26px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:none;cursor:pointer}
 .lcolorin::-webkit-color-swatch-wrapper{padding:2px}.lcolorin::-webkit-color-swatch{border:none;border-radius:50%}
@@ -346,6 +345,9 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .lnewrow input{flex:1}
 .iconbtn.danger:hover{color:var(--neg)}
 .acct-intro{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:var(--r-sm);padding:11px 14px;font-size:13px;color:var(--ink);line-height:1.5;margin-bottom:14px}
+.typechips{display:flex;flex-wrap:wrap;gap:6px}
+.typechip{font:inherit;font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap}
+.typechip:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -702,6 +704,8 @@ const STD_TYPES=[
 ];
 // Clickable standard-type suggestions for a given class (shared by the account form and the Add-type modal).
 function stdTypeRows(cls){ return STD_TYPES.map((t,gi)=>({t,gi})).filter(x=>x.t.cls===cls).map(({t,gi})=>`<button type="button" class="stdrow" data-std="${gi}"><span class="stdrow-top"><b>${esc(t.name)}</b><span class="stdrow-badge ${t.monetary?"mon":"non"}">${t.monetary?"Monetary":"Non-monetary"}</span></span><span class="stdrow-desc">${esc(t.desc)}</span></button>`).join(""); }
+// Compact chip version — a lightweight, optional shortcut that doesn't crowd out typing a custom name.
+function stdChips(cls){ return STD_TYPES.map((t,gi)=>({t,gi})).filter(x=>x.t.cls===cls).map(({t,gi})=>`<button type="button" class="typechip" data-std="${gi}" title="${escAttr(t.desc+" · "+(t.monetary?"Monetary":"Non-monetary"))}">${esc(t.name)}</button>`).join(""); }
 const DEBIT_NORMAL=new Set(["asset","expense"]);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
@@ -1799,22 +1803,23 @@ function renderModal(){
     const syncAdd=()=>{ if(na) na.disabled=!(nn&&nn.value.trim()); };
     if(nn){ nn.addEventListener("input",syncAdd); nn.addEventListener("keydown",e=>{ if(e.key==="Enter"&&nn.value.trim()){ e.preventDefault(); createLedger(nn.value); } }); }
     syncAdd();
+    root.querySelectorAll(".lpath .lptext").forEach(t=>{ t.scrollLeft=t.scrollWidth; });   // start scrolled to the end so the filename shows (no bidi reordering)
   } else if(UI.modal.kind==="type"){
     const t=UI.modal.draft;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:400px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>${UI.modal.id?"Rename type":"Add type"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        <label class="field"><span>Type name</span><input type="text" id="ty-name" value="${escAttr(t.name)}" placeholder="e.g. Bank"></label>
+        <label class="field"><span>Type name</span><input type="text" id="ty-name" value="${escAttr(t.name)}" placeholder="e.g. Bank — type anything you like"></label>
         ${UI.modal.id?"":`<label class="field"><span>Class</span><select id="ty-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${t.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>
-        <div class="field"><span>Suggested types <span style="font-weight:400;color:var(--faint)">— tap to use, or type your own above</span></span><div class="stdlist" id="ty-std">${stdTypeRows(t.cls)}</div></div>`}
+        <div class="field"><span style="font-weight:400;color:var(--faint);font-size:11px">Or start from a standard one</span><div class="typechips" id="ty-std">${stdChips(t.cls)}</div></div>`}
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ty-comment" rows="2" placeholder="Notes about this type">${esc(t.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-type">Save</button></div>
     </div></div>`;
     const tc=document.getElementById("ty-class"), tstd=document.getElementById("ty-std");
-    if(tc) tc.addEventListener("change",()=>{ t.cls=tc.value; t.monetary=(t.cls!=="equity"); if(tstd) tstd.innerHTML=stdTypeRows(t.cls); });
-    if(tstd) tstd.addEventListener("click",e=>{ const b=e.target.closest(".stdrow"); if(!b) return; const s=STD_TYPES[+b.dataset.std]; if(!s) return;
-      t.cls=s.cls; t.monetary=s.monetary; document.getElementById("ty-name").value=s.name; if(tc){ tc.value=s.cls; tstd.innerHTML=stdTypeRows(t.cls); } });
+    if(tc) tc.addEventListener("change",()=>{ t.cls=tc.value; t.monetary=(t.cls!=="equity"); if(tstd) tstd.innerHTML=stdChips(t.cls); });
+    if(tstd) tstd.addEventListener("click",e=>{ const b=e.target.closest(".typechip"); if(!b) return; const s=STD_TYPES[+b.dataset.std]; if(!s) return;
+      t.cls=s.cls; t.monetary=s.monetary; document.getElementById("ty-name").value=s.name; if(tc){ tc.value=s.cls; tstd.innerHTML=stdChips(t.cls); } });
     setTimeout(()=>document.getElementById("ty-name")?.focus(),30);
   } else if(UI.modal.kind==="rates"){
     const rates=S.settings.rates;
