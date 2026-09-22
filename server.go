@@ -281,8 +281,8 @@ func lastTxDate(p string) string {
 
 func stamp() string { return time.Now().Format("20060102-150405") }
 
-func snapList() []string {
-	entries, err := os.ReadDir(snapDir)
+func snapList(dir string) []string {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
@@ -297,20 +297,20 @@ func snapList() []string {
 	return out
 }
 
-func writeSnapshot(body []byte) {
-	if err := os.MkdirAll(snapDir, 0o755); err != nil {
+func writeSnapshot(body []byte, snap string) {
+	if err := os.MkdirAll(snap, 0o755); err != nil {
 		return
 	}
-	before := snapList()
+	before := snapList(snap)
 	if len(before) > 0 {
-		if last, err := os.ReadFile(filepath.Join(snapDir, before[len(before)-1])); err == nil && string(last) == string(body) {
+		if last, err := os.ReadFile(filepath.Join(snap, before[len(before)-1])); err == nil && string(last) == string(body) {
 			return // dedupe
 		}
 	}
-	_ = os.WriteFile(filepath.Join(snapDir, project+"_"+stamp()+".json"), body, 0o644)
-	after := snapList()
+	_ = os.WriteFile(filepath.Join(snap, project+"_"+stamp()+".json"), body, 0o644)
+	after := snapList(snap)
 	for i := 0; i < len(after)-snapKeep; i++ {
-		_ = os.Remove(filepath.Join(snapDir, after[i]))
+		_ = os.Remove(filepath.Join(snap, after[i]))
 	}
 }
 
@@ -600,9 +600,25 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {
+		// Pin to an explicit ledger id when supplied, so a client editing ledger X always hits X's
+		// file regardless of the server's "current" (unknown id → 409). No id → the current ledger.
+		file, snap := ledger, snapDir
+		if lid := r.URL.Query().Get("ledger"); lid != "" {
+			var found *ledgerEntry
+			for i := range cfg.Ledgers {
+				if cfg.Ledgers[i].ID == lid {
+					found = &cfg.Ledgers[i]
+				}
+			}
+			if found == nil {
+				writeJSON(w, 409, map[string]string{"error": "wrong-ledger", "message": "That ledger is no longer in the registry — reload."})
+				return
+			}
+			file, snap = pathOf(found), snapOf(found)
+		}
 		switch r.Method {
 		case http.MethodGet:
-			data, err := os.ReadFile(ledger)
+			data, err := os.ReadFile(file)
 			if err != nil {
 				data = []byte("null")
 			}
@@ -618,7 +634,7 @@ func main() {
 			// Optimistic concurrency: if the client sent the revision it edited (If-Match), the
 			// file on disk must still be at that revision, else refuse (409) and leave it untouched.
 			if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
-				cur, e := os.ReadFile(ledger)
+				cur, e := os.ReadFile(file)
 				if e != nil {
 					cur = []byte("null")
 				}
@@ -628,15 +644,15 @@ func main() {
 					return
 				}
 			}
-			if err := os.MkdirAll(filepath.Dir(ledger), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 				http.Error(w, "mkdir error", 500)
 				return
 			}
-			if err := os.WriteFile(ledger, body, 0o644); err != nil {
+			if err := os.WriteFile(file, body, 0o644); err != nil {
 				http.Error(w, "write error", 500)
 				return
 			}
-			writeSnapshot(body)
+			writeSnapshot(body, snap)
 			w.Header().Set("ETag", etagOf(body))
 			w.WriteHeader(http.StatusNoContent)
 		default:

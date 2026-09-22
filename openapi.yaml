@@ -168,7 +168,14 @@ paths:
       description: >
         Returns the ledger JSON, or the literal null if no file exists yet. The ETag response
         header is the file's current revision — the client keeps it and sends it back as If-Match
-        on the next write (optimistic concurrency).
+        on the next write (optimistic concurrency). Pass ?ledger=<id> to pin to a specific ledger
+        regardless of the server's current one (unknown id → 409); omit it to use the current ledger.
+      parameters:
+        - in: query
+          name: ledger
+          required: false
+          description: Ledger id to read (from /api/ledgers). Omit for the current ledger.
+          schema: { type: string }
       responses:
         "200":
           description: The ledger (or null)
@@ -190,6 +197,11 @@ paths:
         the write is refused with 409 and the file is left untouched — the fresher version wins.
         Omitting If-Match forces an unconditional overwrite.
       parameters:
+        - in: query
+          name: ledger
+          required: false
+          description: Ledger id to write (from /api/ledgers). Omit for the current ledger; unknown id → 409.
+          schema: { type: string }
         - in: header
           name: If-Match
           required: false

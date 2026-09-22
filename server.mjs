@@ -80,15 +80,15 @@ async function lastTxDate(p) {
 const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 
-async function writeSnapshot(body) {
+async function writeSnapshot(body, snap = SNAPDIR) {
   try {
-    await mkdir(SNAPDIR, { recursive: true });
-    const list = () => readdir(SNAPDIR).then((fs) => fs.filter((f) => f.startsWith(PROJECT + "_") && f.endsWith(".json")).sort());
+    await mkdir(snap, { recursive: true });
+    const list = () => readdir(snap).then((fs) => fs.filter((f) => f.startsWith(PROJECT + "_") && f.endsWith(".json")).sort());
     const before = await list();
-    if (before.length) { const last = await readFile(join(SNAPDIR, before[before.length - 1]), "utf8").catch(() => null); if (last === body) return; }
-    await writeFile(join(SNAPDIR, `${PROJECT}_${stamp()}.json`), body);
+    if (before.length) { const last = await readFile(join(snap, before[before.length - 1]), "utf8").catch(() => null); if (last === body) return; }
+    await writeFile(join(snap, `${PROJECT}_${stamp()}.json`), body);
     const after = await list();
-    for (const f of after.slice(0, Math.max(0, after.length - SNAP_KEEP))) await unlink(join(SNAPDIR, f)).catch(() => {});
+    for (const f of after.slice(0, Math.max(0, after.length - SNAP_KEEP))) await unlink(join(snap, f)).catch(() => {});
   } catch { /* a snapshot failure must never block a save */ }
 }
 
@@ -197,8 +197,15 @@ createServer(async (req, res) => {
   }
 
   if (u.pathname === "/api/book") {
+    // Pin every read/write to an EXPLICIT ledger id when the client sends one, so a client editing
+    // ledger X always hits X's file no matter what the server's "current" is (another client may have
+    // switched it). Unknown id → 409 (never write to the wrong book). No id → the current ledger (old clients).
+    const lid = u.searchParams.get("ledger");
+    let entry = curEntry();
+    if (lid) { const found = cfg.ledgers.find((l) => l.id === lid); if (!found) return json(res, 409, { error: "wrong-ledger", message: "That ledger is no longer in the registry — reload." }); entry = found; }
+    const file = pathOf(entry), snap = snapOf(entry);
     if (req.method === "GET") {
-      let d; try { d = await readFile(LEDGER); } catch { d = NULL; }
+      let d; try { d = await readFile(file); } catch { d = NULL; }
       res.writeHead(200, { "content-type": "application/json", "etag": etagOf(d) });
       return res.end(d);
     }
@@ -208,7 +215,7 @@ createServer(async (req, res) => {
       // refuse with 409 and leave the file untouched — the fresher version wins.
       const ifMatch = req.headers["if-match"];
       if (ifMatch) {
-        let cur; try { cur = await readFile(LEDGER); } catch { cur = NULL; }
+        let cur; try { cur = await readFile(file); } catch { cur = NULL; }
         const curTag = etagOf(cur);
         if (ifMatch !== curTag) {
           res.writeHead(409, { "content-type": "application/json", "etag": curTag });
@@ -216,8 +223,8 @@ createServer(async (req, res) => {
         }
       }
       const b = await body(req);
-      try { await mkdir(dirname(LEDGER), { recursive: true }); await writeFile(LEDGER, b); } catch (e) { res.writeHead(500); return res.end(String(e)); }
-      writeSnapshot(b);
+      try { await mkdir(dirname(file), { recursive: true }); await writeFile(file, b); } catch (e) { res.writeHead(500); return res.end(String(e)); }
+      writeSnapshot(b, snap);
       res.writeHead(204, { "etag": etagOf(Buffer.from(b)) }); return res.end();
     }
   }
