@@ -2181,7 +2181,7 @@ go run server.go          # Go</pre>
         <div class="legs${d.lines.length>2?" has-x":""}">
           <div class="linehead"><span>Account</span><span class="r">Debit</span><span class="r">Credit</span>${d.lines.length>2?"<span></span>":""}</div>
           <div class="lines" id="lines">${d.lines.map((l,i)=>lineRow(l,i)).join("")}</div>
-          <button class="btn sm" data-action="add-line" style="margin-top:8px">${I.plus}Add line</button>
+          <button class="btn sm" data-action="add-line" style="margin-top:8px">${I.plus}Add line</button>${d.lines.length===2?`<button class="btn sm" data-action="auto-balance" style="margin-top:8px;margin-left:8px" title="Fill the empty side so the entry balances">Auto-balance</button>`:""}
         </div>
         <div class="balrow" id="balrow"></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="tx-comment" rows="2" placeholder="Notes about this entry">${esc(d.comment||"")}</textarea></label>
@@ -2448,6 +2448,26 @@ function autoConvertLeg(el){
             const os=orow.querySelector(`[data-line=${el.dataset.line}]`); if(os&&document.activeElement!==os) os.value=""; }
   updateBal();
 }
+// Fill the empty side of a 2-leg entry so it balances — driven by the account picker (so entering the
+// amount BEFORE choosing the second account still works) and by the explicit Auto-balance button.
+// Whichever leg already carries an amount is the source; the other leg's opposite side is filled with
+// the equivalent amount in its own currency (same value in the pivot). Returns true if it filled.
+function autoBalanceLegs(){
+  const d=UI.modal&&UI.modal.draft; if(!d||d.lines.length!==2) return false;
+  const A=d.lines[0], B=d.lines[1];
+  if(!A.accountId||!B.accountId) return false;
+  const srcIdx = ((A.debit||0)||(A.credit||0)) ? 0 : ((((B.debit||0)||(B.credit||0))) ? 1 : -1);
+  if(srcIdx<0) return false;
+  const Src=d.lines[srcIdx], O=d.lines[1-srcIdx];
+  const srcSide = (Src.debit||0)>0 ? "debit" : "credit";
+  const opp = srcSide==="debit" ? "credit" : "debit";
+  if((O[opp]||0)>0 && !O._auto) return false;   // never clobber an amount the user typed on the other leg
+  const amt=Src[srcSide]; if(!(amt>0)) return false;
+  const otherAmt=round2(convert(amt, accCur(acctById(Src.accountId)), accCur(acctById(O.accountId))));
+  if(!(otherAmt>0)) return false;               // no usable rate yet
+  O[opp]=otherAmt; O[srcSide]=0; O._auto=true;
+  return true;
+}
 function syncLines(){
   const d=UI.modal.draft;
   d.date=document.getElementById("tx-date").value;
@@ -2617,7 +2637,8 @@ document.addEventListener("click",e=>{
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
-    case "acct-choose": { const i=+el.dataset.i; syncLines(); UI.modal.draft.lines[i].accountId=el.dataset.id||""; UI.acctPickOpen=null; UI.acctPickFilter=""; renderModal(); break; }
+    case "acct-choose": { const i=+el.dataset.i; syncLines(); UI.modal.draft.lines[i].accountId=el.dataset.id||""; UI.acctPickOpen=null; UI.acctPickFilter=""; autoBalanceLegs(); renderModal(); break; }
+    case "auto-balance": { syncLines(); if(!autoBalanceLegs()) toast("Enter an amount on one leg and pick both accounts first."); renderModal(); break; }
     case "acct-add": { // create a new account for this leg, pre-filed under the class/type the + sat on
       const i=+el.dataset.i, cls=el.dataset.class, tid=el.dataset.type||"";
       syncLines(); UI.acctPickOpen=null; UI.acctPickFilter="";
