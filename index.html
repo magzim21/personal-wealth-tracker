@@ -1859,7 +1859,7 @@ function renderModal(){
           <button class="lswatch" data-action="ledger-color-open" data-id="${l.id}" style="background:${esc(l.color)}" title="Change colour" aria-label="Change colour"></button>
           <input class="lrename" data-id="${l.id}" value="${escAttr(l.name)}" aria-label="Ledger name" spellcheck="false">
           ${l.current?`<span class="lcurbadge">Current</span>`:`<button class="btn sm" data-action="ledger-switch" data-id="${l.id}">Open</button>`}
-          <button class="iconbtn danger" data-action="ledger-remove" data-id="${l.id}" title="Remove from list"${(L.ledgers||[]).length<2?" disabled":""}>${I.trash}</button>
+          <button class="iconbtn danger" data-action="ledger-remove" data-id="${l.id}" title="${(L.ledgers||[]).length<2?"Remove — starts a fresh empty ledger":"Remove from list"}">${I.trash}</button>
         </div>
         <div class="ldgmeta">${l.lastTx?`Last transaction ${esc(fmtDateHuman(l.lastTx))}`:"No transactions yet"}</div>
         <button class="lpath" data-action="ledger-copy-path" data-path="${escAttr(l.path)}" title="Click to copy — ${escAttr(l.path)}"><span class="lpicon">${I.copy||"⧉"}</span><span class="lptext">${esc(l.path)}</span></button>
@@ -2474,7 +2474,12 @@ document.addEventListener("click",e=>{
     case "ledger-color-open": UI.modal.colorFor=(UI.modal.colorFor===id?null:id); renderModal(); break;
     case "ledger-color-pick": ledgerOp("color",id,{color:el.dataset.color}).then(ok=>{ if(ok){ UI.modal.colorFor=null; applyLedgerAccent(); render(); renderModal(); } }); break;
     case "ledger-copy-path": { const pth=el.dataset.path||""; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(pth).then(()=>toast("Path copied"),()=>toast("Couldn't copy")); } else toast("Copy isn't available here"); break; }
-    case "ledger-remove": askConfirm("Remove this ledger from the list? Its file stays on disk — you can add it back later via the storage location.", (delSnaps)=>{ ledgerOp("remove",id,{snapshots:!!delSnaps}).then(async ok=>{ if(ok){ await reloadBook(); await loadLedgers(); applyLedgerAccent(); render(); renderModal(); toast(delSnaps?"Removed; its snapshots were deleted.":"Removed from the list."); } }); }, {label:"Also delete this ledger's snapshots"}); break;
+    case "ledger-remove": { const only=!!(LEDGERS&&LEDGERS.ledgers&&LEDGERS.ledgers.length<2);
+      askConfirm(only
+          ? "This is your only ledger. Removing it starts a fresh, empty ledger — this one's file stays on disk, so you can add it back later from the storage location."
+          : "Remove this ledger from the list? Its file stays on disk — you can add it back later via the storage location.",
+        (delSnaps)=>{ ledgerOp("remove",id,{snapshots:!!delSnaps}).then(async ok=>{ if(ok){ setMyLedger((LEDGERS&&LEDGERS.current)||null); await reloadBook(); applyLedgerAccent(); render(); renderModal(); toast(delSnaps?"Removed; its snapshots were deleted.":(only?"Removed — started a fresh ledger.":"Removed from the list.")); } }); },
+        {label:"Also delete this ledger's snapshots"}); break; }
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
