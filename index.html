@@ -318,8 +318,17 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .ledgername .lname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ledgername .lchev{opacity:.6;display:inline-flex}.ledgername .lchev svg{width:12px;height:12px}
 .ldglist{display:flex;flex-direction:column;gap:6px}
-.ldgrow{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.ldgrow{display:flex;flex-direction:column;gap:7px;padding:8px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
 .ldgrow.cur{border-color:var(--accent);background:var(--accent-soft)}
+.ldgtop{display:flex;align-items:center;gap:9px}
+.lpath{display:flex;align-items:center;gap:6px;width:100%;text-align:left;font-family:var(--fs-mono);font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
+.lpath:hover{border-color:var(--accent);color:var(--ink)}
+.lpath .lpicon{flex:none;opacity:.6;display:inline-flex}.lpath .lpicon svg{width:12px;height:12px}
+.lpath .lptext{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lcustom{display:inline-flex;align-items:center;gap:6px;margin-left:2px}
+.lcolorin{width:26px;height:26px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:none;cursor:pointer}
+.lcolorin::-webkit-color-swatch-wrapper{padding:2px}.lcolorin::-webkit-color-swatch{border:none;border-radius:50%}
+.lhex{font-family:var(--fs-mono);font-size:11px;color:var(--muted)}
 .lswatch{width:20px;height:20px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong);cursor:pointer;flex:none;padding:0}
 .lrename{flex:1;min-width:0;border:1px solid transparent;background:none;font:inherit;font-weight:600;font-size:14px;color:var(--ink);padding:4px 6px;border-radius:6px}
 .lrename:hover{border-color:var(--line)}
@@ -1746,23 +1755,34 @@ function renderModal(){
     const L=LEDGERS||{ledgers:[],palette:[],usedColors:[]};
     const openC=UI.modal.colorFor;
     const row=l=>`<div class="ldgrow${l.current?" cur":""}">
-        <button class="lswatch" data-action="ledger-color-open" data-id="${l.id}" style="background:${esc(l.color)}" title="Change colour" aria-label="Change colour"></button>
-        <input class="lrename" data-id="${l.id}" value="${escAttr(l.name)}" aria-label="Ledger name" spellcheck="false">
-        ${l.current?`<span class="lcurbadge">Current</span>`:`<button class="btn sm" data-action="ledger-switch" data-id="${l.id}">Open</button>`}
-        <button class="iconbtn danger" data-action="ledger-remove" data-id="${l.id}" title="Remove from list"${(L.ledgers||[]).length<2?" disabled":""}>${I.trash}</button>
-      </div>${openC===l.id?`<div class="lpalette">${(L.palette||[]).map(c=>{ const taken=(L.usedColors||[]).includes(c)&&l.color!==c; return `<button class="lsw${l.color===c?" on":""}" data-action="ledger-color-pick" data-id="${l.id}" data-color="${esc(c)}" style="background:${esc(c)}"${taken?" disabled":""} title="${taken?"Used by another ledger":esc(c)}"></button>`; }).join("")}</div>`:""}`;
+        <div class="ldgtop">
+          <button class="lswatch" data-action="ledger-color-open" data-id="${l.id}" style="background:${esc(l.color)}" title="Change colour" aria-label="Change colour"></button>
+          <input class="lrename" data-id="${l.id}" value="${escAttr(l.name)}" aria-label="Ledger name" spellcheck="false">
+          ${l.current?`<span class="lcurbadge">Current</span>`:`<button class="btn sm" data-action="ledger-switch" data-id="${l.id}">Open</button>`}
+          <button class="iconbtn danger" data-action="ledger-remove" data-id="${l.id}" title="Remove from list"${(L.ledgers||[]).length<2?" disabled":""}>${I.trash}</button>
+        </div>
+        <button class="lpath" data-action="ledger-copy-path" data-path="${escAttr(l.path)}" title="Click to copy — ${escAttr(l.path)}"><span class="lpicon">${I.copy||"⧉"}</span><span class="lptext">${esc(l.path)}</span></button>
+      </div>${openC===l.id?`<div class="lpalette">${(L.palette||[]).map(c=>{ const taken=(L.usedColors||[]).includes(c)&&l.color!==c; return `<button class="lsw${l.color===c?" on":""}" data-action="ledger-color-pick" data-id="${l.id}" data-color="${esc(c)}" style="background:${esc(c)}"${taken?" disabled":""} title="${taken?"Used by another ledger":esc(c)}"></button>`; }).join("")}<span class="lcustom" title="Custom colour"><input type="color" class="lcolorin" data-id="${l.id}" value="${escAttr((l.color&&l.color[0]==="#"&&l.color.length===7)?l.color:"#2f7d5b")}" aria-label="Custom colour"><span class="lhex" id="lhex-${l.id}">${esc(l.color)}</span></span></div>`:""}`;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:470px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>Ledgers</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        <p class="muted" style="font-size:12.5px;margin:0">Each ledger is its own book — its own accounts, entries, currency, theme and font. New ones are created in <code style="font-size:11px">${esc(L.ledgersRoot||"")}</code>.</p>
+        <p class="muted" style="font-size:12.5px;margin:0">Each ledger is its own book — its own accounts, entries, currency, theme and font. Click a file path to copy it.</p>
         <div class="ldglist">${(L.ledgers||[]).map(row).join("")}</div>
-        <div class="lnewrow"><input type="text" id="lnew-name" placeholder="New ledger name" spellcheck="false"><button class="btn primary sm" data-action="ledger-new">＋ Create</button></div>
+        <div class="lnewrow"><input type="text" id="lnew-name" placeholder="New ledger name" spellcheck="false"><button class="btn primary sm" id="lnew-add" data-action="ledger-new" disabled>＋ Create</button></div>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
     </div></div>`;
     root.querySelectorAll(".lrename").forEach(inp=>{ const commit=()=>{ const v=inp.value.trim(), id=inp.dataset.id, l=(L.ledgers||[]).find(x=>x.id===id); if(l&&v&&v!==l.name){ ledgerOp("rename",id,{name:v}).then(ok=>{ if(ok){ render(); renderModal(); } }); } };
       inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } }); inp.addEventListener("blur",commit); });
-    const nn=document.getElementById("lnew-name"); if(nn) nn.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); createLedger(nn.value); } });
+    // custom colour: live hex readout while picking, commit on close of the native picker
+    const ci=root.querySelector(".lcolorin");
+    if(ci){ const hex=document.getElementById("lhex-"+ci.dataset.id);
+      ci.addEventListener("input",()=>{ if(hex) hex.textContent=ci.value; });
+      ci.addEventListener("change",()=>{ ledgerOp("color",ci.dataset.id,{color:ci.value}).then(ok=>{ if(ok){ UI.modal.colorFor=null; render(); } renderModal(); }); }); }
+    const nn=document.getElementById("lnew-name"), na=document.getElementById("lnew-add");
+    const syncAdd=()=>{ if(na) na.disabled=!(nn&&nn.value.trim()); };
+    if(nn){ nn.addEventListener("input",syncAdd); nn.addEventListener("keydown",e=>{ if(e.key==="Enter"&&nn.value.trim()){ e.preventDefault(); createLedger(nn.value); } }); }
+    syncAdd();
   } else if(UI.modal.kind==="type"){
     const t=UI.modal.draft;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:400px" role="dialog" aria-modal="true">
@@ -2321,6 +2341,7 @@ document.addEventListener("click",e=>{
     case "ledger-new": createLedger(document.getElementById("lnew-name")?.value); break;
     case "ledger-color-open": UI.modal.colorFor=(UI.modal.colorFor===id?null:id); renderModal(); break;
     case "ledger-color-pick": ledgerOp("color",id,{color:el.dataset.color}).then(ok=>{ if(ok){ UI.modal.colorFor=null; render(); renderModal(); } }); break;
+    case "ledger-copy-path": { const pth=el.dataset.path||""; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(pth).then(()=>toast("Path copied"),()=>toast("Couldn't copy")); } else toast("Copy isn't available here"); break; }
     case "ledger-remove": askConfirm("Remove this ledger from the list? Its file stays on disk — you can add it back later via the storage location.", ()=>{ ledgerOp("remove",id).then(async ok=>{ if(ok){ await reloadBook(); render(); renderModal(); toast("Removed from the list."); } }); }); break;
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
