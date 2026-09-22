@@ -48,13 +48,14 @@ function migrate(c) {
     c.schema = CONFIG_SCHEMA; c.ledgersRoot = c.ledgersRoot || DEFAULT_ROOT;
     c.ledgers.forEach((l, i) => { if (!l.id) l.id = uid(); if (!l.color) l.color = PALETTE[i % PALETTE.length]; if (!l.snapshotDir) l.snapshotDir = join(dirname(l.path), "snapshots"); });
     if (!c.current && c.ledgers[0]) c.current = c.ledgers[0].id;
+    const cur = c.ledgers.find((l) => l.id === c.current); if (cur && !cur.lastOpened) cur.lastOpened = Date.now(); // so recency sort has an anchor
     return c;
   }
   // v1 single-ledger config, or a fresh start: capture the currently-resolved ledger as the first entry.
   const oldPath = process.env.LEDGER_PATH || (c && c.ledgerPath) || (existsSync(join(process.cwd(), "ledger.json")) ? join(process.cwd(), "ledger.json") : join(DEFAULT_ROOT, "ledger.json"));
   const oldSnap = process.env.SNAPSHOT_DIR || (c && c.snapshotDir) || join(dirname(oldPath), "snapshots");
   const id = uid();
-  return { schema: CONFIG_SCHEMA, ledgersRoot: (c && c.ledgersRoot) || DEFAULT_ROOT, current: id, ledgers: [{ id, name: "My ledger", path: oldPath, snapshotDir: oldSnap, color: PALETTE[0] }] };
+  return { schema: CONFIG_SCHEMA, ledgersRoot: (c && c.ledgersRoot) || DEFAULT_ROOT, current: id, ledgers: [{ id, name: "My ledger", path: oldPath, snapshotDir: oldSnap, color: PALETTE[0], lastOpened: Date.now() }] };
 }
 
 let cfg = migrate(await loadConfig());
@@ -115,9 +116,11 @@ createServer(async (req, res) => {
 
   // ---- ledger registry: list / create / switch / rename / recolour / remove ----
   if (u.pathname === "/api/ledgers") {
-    if (req.method === "GET")
+    if (req.method === "GET") {
+      const ordered = [...cfg.ledgers].sort((a, b) => (a.id === cfg.current ? -1 : b.id === cfg.current ? 1 : (b.lastOpened || 0) - (a.lastOpened || 0))); // current on top, then most-recently-opened
       return json(res, 200, { ledgersRoot: cfg.ledgersRoot, current: cfg.current, palette: PALETTE, usedColors: cfg.ledgers.map((l) => l.color),
-        ledgers: cfg.ledgers.map((l) => ({ id: l.id, name: l.name, path: l.path, color: l.color, exists: existsSync(pathOf(l)), current: l.id === cfg.current })) });
+        ledgers: ordered.map((l) => ({ id: l.id, name: l.name, path: l.path, color: l.color, exists: existsSync(pathOf(l)), current: l.id === cfg.current })) });
+    }
     if (req.method === "POST") {
       let o = {}; try { o = JSON.parse(await body(req)); } catch {}
       const name = (o.name || "New ledger").trim() || "New ledger";
@@ -127,14 +130,14 @@ createServer(async (req, res) => {
       const root = cfg.ledgersRoot; let bn = slug(name), path = join(root, bn + ".json"), n = 1;
       while (cfg.ledgers.some((l) => l.path === path) || existsSync(path)) path = join(root, bn + "-" + (++n) + ".json");
       try { await mkdir(dirname(path), { recursive: true }); if (!existsSync(path)) await writeFile(path, "null"); } catch (e) { return json(res, 500, { error: String(e) }); }
-      const e = { id: uid(), name, path, snapshotDir: join(root, "snapshots", basename(path, ".json")), color };
+      const e = { id: uid(), name, path, snapshotDir: join(root, "snapshots", basename(path, ".json")), color, lastOpened: Date.now() };
       cfg.ledgers.push(e); cfg.current = e.id; await saveConfig(cfg); useCurrent();
       return json(res, 200, { ok: true, id: e.id, current: cfg.current });
     }
     if (req.method === "PUT") {
       let o = {}; try { o = JSON.parse(await body(req)); } catch {}
       const e = cfg.ledgers.find((l) => l.id === o.id);
-      if (o.op === "switch") { if (!e) return json(res, 404, { error: "no such ledger" }); cfg.current = e.id; await saveConfig(cfg); useCurrent(); return json(res, 200, { ok: true, current: cfg.current }); }
+      if (o.op === "switch") { if (!e) return json(res, 404, { error: "no such ledger" }); e.lastOpened = Date.now(); cfg.current = e.id; await saveConfig(cfg); useCurrent(); return json(res, 200, { ok: true, current: cfg.current }); }
       if (o.op === "rename") { if (!e) return json(res, 404, { error: "no such ledger" }); e.name = (o.name || e.name).trim() || e.name; await saveConfig(cfg); return json(res, 200, { ok: true }); }
       if (o.op === "color") { if (!e) return json(res, 404, { error: "no such ledger" }); if (cfg.ledgers.some((l) => l.id !== e.id && l.color === o.color)) return json(res, 409, { error: "That colour is already used by another ledger." }); e.color = o.color; await saveConfig(cfg); return json(res, 200, { ok: true }); }
       if (o.op === "remove") {

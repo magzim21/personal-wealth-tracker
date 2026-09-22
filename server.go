@@ -88,6 +88,7 @@ type ledgerEntry struct {
 	Path        string `json:"path"`
 	SnapshotDir string `json:"snapshotDir"`
 	Color       string `json:"color"`
+	LastOpened  int64  `json:"lastOpened,omitempty"`
 }
 
 type config struct {
@@ -189,6 +190,11 @@ func migrate(c config) config {
 		if c.Current == "" {
 			c.Current = c.Ledgers[0].ID
 		}
+		for i := range c.Ledgers { // give the current ledger a recency anchor
+			if c.Ledgers[i].ID == c.Current && c.Ledgers[i].LastOpened == 0 {
+				c.Ledgers[i].LastOpened = time.Now().UnixMilli()
+			}
+		}
 		return c
 	}
 	oldPath := os.Getenv("LEDGER_PATH")
@@ -214,7 +220,7 @@ func migrate(c config) config {
 		root = defaultRoot
 	}
 	id := uid()
-	return config{Schema: configSchema, LedgersRoot: root, Current: id, Ledgers: []ledgerEntry{{ID: id, Name: "My ledger", Path: oldPath, SnapshotDir: oldSnap, Color: palette[0]}}}
+	return config{Schema: configSchema, LedgersRoot: root, Current: id, Ledgers: []ledgerEntry{{ID: id, Name: "My ledger", Path: oldPath, SnapshotDir: oldSnap, Color: palette[0], LastOpened: time.Now().UnixMilli()}}}
 }
 
 func curEntry() *ledgerEntry {
@@ -331,12 +337,25 @@ func main() {
 	mux.HandleFunc("/api/ledgers", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			led := make([]map[string]any, 0, len(cfg.Ledgers))
 			used := make([]string, 0, len(cfg.Ledgers))
-			for i := range cfg.Ledgers {
-				l := &cfg.Ledgers[i]
-				led = append(led, map[string]any{"id": l.ID, "name": l.Name, "path": l.Path, "color": l.Color, "exists": exists(pathOf(l)), "current": l.ID == cfg.Current})
+			for _, l := range cfg.Ledgers {
 				used = append(used, l.Color)
+			}
+			ordered := make([]ledgerEntry, len(cfg.Ledgers))
+			copy(ordered, cfg.Ledgers)
+			sort.SliceStable(ordered, func(a, b int) bool { // current on top, then most-recently-opened
+				if ordered[a].ID == cfg.Current {
+					return true
+				}
+				if ordered[b].ID == cfg.Current {
+					return false
+				}
+				return ordered[a].LastOpened > ordered[b].LastOpened
+			})
+			led := make([]map[string]any, 0, len(ordered))
+			for i := range ordered {
+				l := &ordered[i]
+				led = append(led, map[string]any{"id": l.ID, "name": l.Name, "path": l.Path, "color": l.Color, "exists": exists(pathOf(l)), "current": l.ID == cfg.Current})
 			}
 			writeJSON(w, 200, map[string]any{"ledgersRoot": cfg.LedgersRoot, "current": cfg.Current, "palette": palette, "usedColors": used, "ledgers": led})
 		case http.MethodPost:
@@ -380,7 +399,7 @@ func main() {
 			if !exists(p) {
 				_ = os.WriteFile(p, []byte("null"), 0o644)
 			}
-			e := ledgerEntry{ID: uid(), Name: name, Path: p, SnapshotDir: filepath.Join(root, "snapshots", strings.TrimSuffix(filepath.Base(p), ".json")), Color: color}
+			e := ledgerEntry{ID: uid(), Name: name, Path: p, SnapshotDir: filepath.Join(root, "snapshots", strings.TrimSuffix(filepath.Base(p), ".json")), Color: color, LastOpened: time.Now().UnixMilli()}
 			cfg.Ledgers = append(cfg.Ledgers, e)
 			cfg.Current = e.ID
 			_ = saveConfig(cfg)
@@ -405,6 +424,7 @@ func main() {
 					writeJSON(w, 404, map[string]string{"error": "no such ledger"})
 					return
 				}
+				e.LastOpened = time.Now().UnixMilli()
 				cfg.Current = e.ID
 				_ = saveConfig(cfg)
 				useCurrent()
