@@ -345,6 +345,7 @@ input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-nume
 .lnewrow{display:flex;gap:8px;margin-top:4px}
 .lnewrow input{flex:1}
 .iconbtn.danger:hover{color:var(--neg)}
+.acct-intro{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:var(--r-sm);padding:11px 14px;font-size:13px;color:var(--ink);line-height:1.5;margin-bottom:14px}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -699,6 +700,8 @@ const STD_TYPES=[
   {name:"Retained earnings",cls:"equity",monetary:false,desc:"Accumulated profit kept in the book."},
   {name:"Opening balance equity",cls:"equity",monetary:false,desc:"Balancing entry for initial balances."},
 ];
+// Clickable standard-type suggestions for a given class (shared by the account form and the Add-type modal).
+function stdTypeRows(cls){ return STD_TYPES.map((t,gi)=>({t,gi})).filter(x=>x.t.cls===cls).map(({t,gi})=>`<button type="button" class="stdrow" data-std="${gi}"><span class="stdrow-top"><b>${esc(t.name)}</b><span class="stdrow-badge ${t.monetary?"mon":"non"}">${t.monetary?"Monetary":"Non-monetary"}</span></span><span class="stdrow-desc">${esc(t.desc)}</span></button>`).join(""); }
 const DEBIT_NORMAL=new Set(["asset","expense"]);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
@@ -883,6 +886,15 @@ const FONTS=[
   ["mono","IBM Plex Mono",'"IBM Plex Mono",ui-monospace,Menlo,monospace']
 ];
 function applyFont(){ const f=FONTS.find(x=>x[0]===(S&&S.settings&&S.settings.font))||FONTS[0]; document.documentElement.style.setProperty("--fs-sans", f[2]); }
+// Headline font (the display face used by h1/h2/h3) — a separate role from the body font. Only
+// system/already-loaded families, so nothing is fetched. "Sans" makes headings match the body for a
+// single-typeface look; the serifs give an editorial hierarchy.
+const HEADFONTS=[
+  ["display","Display serif",'"Fraunces",Georgia,serif'],
+  ["serif","Classic serif",'Georgia,"Times New Roman",serif'],
+  ["sans","Sans — match body","var(--fs-sans)"]
+];
+function applyHeadFont(){ const f=HEADFONTS.find(x=>x[0]===(S&&S.settings&&S.settings.headFont))||HEADFONTS[0]; document.documentElement.style.setProperty("--fs-display", f[2]); }
 try{ matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{ if(((S&&S.settings&&S.settings.theme)||"auto")==="auto") applyPalette(); }); }catch(_){}
 
 const acctById=id=>S.accounts.find(a=>a.id===id);
@@ -1019,10 +1031,11 @@ function warnBanner(){
   return `<div class="warnbanner" role="alert">${rows}</div>`;
 }
 function viewAccounts(){
-  // first run: no chart of accounts yet — explain what accounts are and give one next step
-  if(!S.types.length && !S.accounts.filter(a=>!a.deleted).length)
-    return emptyState("Set up your accounts","Start with a type like Cash, Bank, or Credit card, then add accounts under it. This chart of accounts is what your entries post to.",`<button class="btn primary" data-action="new-type" data-class="asset">${I.plus}Add your first type</button>`,I.coin);
   let out="";
+  // The three statement classes are always present — even an empty ledger shows them as the scaffold.
+  // On first run, prepend a one-line explainer instead of hiding the classes behind a full empty state.
+  if(!S.types.length && !S.accounts.filter(a=>!a.deleted).length)
+    out+=`<div class="acct-intro"><b>Set up your accounts.</b> Every ledger has these three classes. Add a type under one — Cash, Bank, Credit card… — with its <b>+</b>, then add accounts under the type. This chart of accounts is what your entries post to.</div>`;
   for(const [ck,cl] of CLASSES){
     // types ordered by amount, high → low (by balance magnitude in the base currency; name breaks ties)
     const types=typesInClass(ck).slice().sort((a,b)=>(Math.abs(typeBalanceBase(b.id))-Math.abs(typeBalanceBase(a.id)))||a.name.localeCompare(b.name));
@@ -1518,7 +1531,7 @@ async function reloadBook(){
   let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
   if(loaded && Number(loaded.schemaVersion)>SCHEMA){ renderSchemaBlock(Number(loaded.schemaVersion)); return false; }
   S = loaded ? migrate(loaded) : seed();
-  normalizeState(); loadUIPrefs(); applyTheme(); applyFont();
+  normalizeState(); loadUIPrefs(); applyTheme(); applyFont(); applyHeadFont();
   STORE.save(S,"silent");
   return true;
 }
@@ -1685,7 +1698,6 @@ function renderModal(){
   if(UI.modal.kind==="acct"){
     const a=UI.modal.draft;
     const typeOpts=cls=>{ const list=typesInClass(cls).slice().sort((x,y)=>x.name.localeCompare(y.name)); return `<option value="">${list.length?"— choose type —":"— none yet —"}</option>`+list.map(t=>`<option value="${t.id}" ${a.typeId===t.id?"selected":""}>${esc(t.name)}</option>`).join("")+`<option value="__std">＋ Standard type…</option>`+`<option value="__new" ${a.typeId==="__new"?"selected":""}>＋ New type…</option>`; };
-    const stdTypeRows=cls=>STD_TYPES.map((t,gi)=>({t,gi})).filter(x=>x.t.cls===cls).map(({t,gi})=>`<button type="button" class="stdrow" data-std="${gi}"><span class="stdrow-top"><b>${esc(t.name)}</b><span class="stdrow-badge ${t.monetary?"mon":"non"}">${t.monetary?"Monetary":"Non-monetary"}</span></span><span class="stdrow-desc">${esc(t.desc)}</span></button>`).join("");
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:430px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>${UI.modal.id?"Edit account":"Add account"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
@@ -1793,11 +1805,16 @@ function renderModal(){
       <div class="modal-h"><h3>${UI.modal.id?"Rename type":"Add type"}</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
         <label class="field"><span>Type name</span><input type="text" id="ty-name" value="${escAttr(t.name)}" placeholder="e.g. Bank"></label>
-        ${UI.modal.id?"":`<label class="field"><span>Class</span><select id="ty-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${t.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>`}
+        ${UI.modal.id?"":`<label class="field"><span>Class</span><select id="ty-class">${CLASSES.map(([k,l])=>`<option value="${k}" ${t.cls===k?"selected":""}>${l}</option>`).join("")}</select></label>
+        <div class="field"><span>Suggested types <span style="font-weight:400;color:var(--faint)">— tap to use, or type your own above</span></span><div class="stdlist" id="ty-std">${stdTypeRows(t.cls)}</div></div>`}
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ty-comment" rows="2" placeholder="Notes about this type">${esc(t.comment||"")}</textarea></label>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="save-type">Save</button></div>
     </div></div>`;
+    const tc=document.getElementById("ty-class"), tstd=document.getElementById("ty-std");
+    if(tc) tc.addEventListener("change",()=>{ t.cls=tc.value; t.monetary=(t.cls!=="equity"); if(tstd) tstd.innerHTML=stdTypeRows(t.cls); });
+    if(tstd) tstd.addEventListener("click",e=>{ const b=e.target.closest(".stdrow"); if(!b) return; const s=STD_TYPES[+b.dataset.std]; if(!s) return;
+      t.cls=s.cls; t.monetary=s.monetary; document.getElementById("ty-name").value=s.name; if(tc){ tc.value=s.cls; tstd.innerHTML=stdTypeRows(t.cls); } });
     setTimeout(()=>document.getElementById("ty-name")?.focus(),30);
   } else if(UI.modal.kind==="rates"){
     const rates=S.settings.rates;
@@ -1829,8 +1846,11 @@ function renderModal(){
           <div class="sfield"><span>Colors</span>
             <div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>
           </div>
-          <label class="sfield"><span>Font <span class="infodot" data-tip="Change the body typeface. Every choice is built into your system or already bundled — nothing is downloaded, so it works offline.">&#9432;</span></span>
+          <label class="sfield"><span>Body font <span class="infodot" data-tip="The body/UI typeface. Every choice is built into your system or already bundled — nothing is downloaded, so it works offline.">&#9432;</span></span>
             <select id="font-pick">${FONTS.map(([id,label,stack])=>`<option value="${id}" ${(S.settings.font||"plex")===id?"selected":""} style="font-family:${escAttr(stack)}">${esc(label)}</option>`).join("")}</select>
+          </label>
+          <label class="sfield"><span>Headline font <span class="infodot" data-tip="The face for titles and headings, separate from the body. “Sans — match body” makes headings share the body font for a single-typeface look; the serifs give an editorial, book-like hierarchy.">&#9432;</span></span>
+            <select id="headfont-pick">${HEADFONTS.map(([id,label,stack])=>`<option value="${id}" ${(S.settings.headFont||"display")===id?"selected":""} style="font-family:${escAttr(stack)}">${esc(label)}</option>`).join("")}</select>
           </label>
           <div class="sfield"><span>Density <span class="infodot" data-tip="Compact tightens the spacing between rows and entries so more fits on screen. Comfortable is the roomier default.">&#9432;</span></span>
             <div class="themeseg" role="group" aria-label="Density">${[["comfortable","Comfortable"],["compact","Compact"]].map(([k,l])=>`<button class="${((S.settings.density||"comfortable")===k)?"on":""}" data-action="set-density" data-density="${k}">${l}</button>`).join("")}</div>
@@ -2475,7 +2495,9 @@ document.addEventListener("change",e=>{
     if(anchor>0){ Object.keys(r).forEach(c=>{ r[c]=round4(r[c]/anchor); }); r[nv]=1; }
     S.settings.vehicle=nv; save(); render(); renderModal(); toast(`Vehicle currency set to ${nv} — new entries only.`); return; }
   const fp=e.target.closest("#font-pick");
-  if(fp){ S.settings.font=fp.value; applyFont(); save(); renderModal(); return; }
+  if(fp){ S.settings.font=fp.value; applyFont(); applyHeadFont(); save(); renderModal(); return; }   // re-apply head font too in case it's "match body"
+  const hfp=e.target.closest("#headfont-pick");
+  if(hfp){ S.settings.headFont=hfp.value; applyHeadFont(); save(); renderModal(); return; }
   const stt=e.target.closest("#showtime-toggle");
   if(stt){ S.settings.showTxTime=stt.checked; save(); render(); renderModal(); return; }
   const scc=e.target.closest("#showcents-toggle");
@@ -2669,7 +2691,7 @@ function saveType(){
   if(!name){ const el=document.getElementById("ty-name"); if(el){el.classList.add("invalid");el.focus();} toast("Name the type."); return; }
   const comment=(document.getElementById("ty-comment").value||"").trim();
   if(UI.modal.id){ const t=typeById(UI.modal.id); if(t){ t.name=name; t.comment=comment; } }
-  else { const cls=document.getElementById("ty-class").value; S.types.push({id:uid(),name,class:cls,comment}); }
+  else { const cls=document.getElementById("ty-class").value; const d=UI.modal.draft; const mon=(d&&d.monetary!=null)?d.monetary:(cls!=="equity"); S.types.push({id:uid(),name,class:cls,comment,monetary:mon}); }
   save();render();dismissModal();
 }
 function saveTx(){
@@ -3028,6 +3050,7 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
   loadUIPrefs();
   applyTheme();
   applyFont();
+  applyHeadFont();
   if(STORE===FILE_STORE){
     await loadLedgers();   // multi-book registry (null on an old server → single-ledger look, until they restart)
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
