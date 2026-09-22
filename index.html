@@ -292,6 +292,16 @@ textarea{font-family:inherit;resize:vertical;min-height:44px;line-height:1.4}
 input[type=number]{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
 .amtin{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
 .amtin:disabled{background:var(--surface-2);color:var(--faint);cursor:not-allowed;opacity:.7}
+.lockrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.curlock{font-size:14px}
+.convprev{margin-top:2px;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2)}
+.convtbl{width:100%;border-collapse:collapse;font-size:13px}
+.convtbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);padding:4px 6px;border-bottom:1px solid var(--line);font-weight:600}
+.convtbl td{padding:6px;border-bottom:1px solid var(--line)}
+.convtbl tr:last-child td{border-bottom:none}
+.convtbl .num{text-align:right;font-family:var(--fs-mono);font-variant-numeric:tabular-nums}
+.convnote{margin-top:10px;font-size:12.5px;color:var(--muted)}
+.convnote.warn{color:#b0741a}
 label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 label.field input,label.field select{font-weight:400;color:var(--ink)}
 
@@ -1586,7 +1596,11 @@ function renderModal(){
           <label class="field"><span>Type</span><select id="ac-type">${typeOpts(a.cls)}</select></label>
         </div>
         <label class="field" id="ac-newtype-wrap" style="${a.typeId==="__new"?"":"display:none"}"><span>New type name</span><input type="text" id="ac-newtype" placeholder="e.g. Bank"></label>
-        <label class="field"><span>Currency</span>${curField("ac-cur",a.currency)}</label>
+        ${(UI.modal.id && acctHasEntries(UI.modal.id))
+          ? `<div class="field"><span>Currency <span class="infodot" data-tip="This account already has entries, each recorded in ${escAttr(a.currency)} at its historical rate. Changing the currency in place would silently restate that history, so it's locked. Use Convert to move the balance to another currency at today's rate as a dated entry — the ${escAttr(a.currency)} account is archived and its history stays intact.">&#9432;</span></span>
+              <div class="lockrow"><span class="curlock"><b>${esc(a.currency)}</b>${CUR_NAMES[a.currency]?` <span class="muted">${esc(CUR_NAMES[a.currency])}</span>`:""}</span><button type="button" class="btn sm" data-action="convert-open">Convert…</button></div>
+              <input type="hidden" id="ac-cur" value="${escAttr(a.currency)}"></div>`
+          : `<label class="field"><span>Currency</span>${curField("ac-cur",a.currency)}</label>`}
         <div class="field"><span>Kind <span class="infodot" data-tip="Monetary = cash-like money whose worth is fixed in its own currency (bank balances, loans, receivables). It's revalued as rates move, and converting its currency realizes an FX gain or loss. Non-monetary = carried at historical cost (equity, and physical things like a car or camera) — not revalued for FX, and converting its currency just re-states it at the same value, no gain or loss. Defaults from the class (equity → non-monetary, assets & liabilities → monetary); change it only for exceptions like a physical asset.">&#9432;</span></span>
           <div class="themeseg" role="group" aria-label="Account kind" id="ac-monetary">${[[true,"Monetary"],[false,"Non-monetary"]].map(([k,l])=>`<button type="button" class="${a.monetary===k?"on":""}" data-mon="${k}">${l}</button>`).join("")}</div></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="ac-comment" rows="2" placeholder="Notes about this account">${esc(a.comment||"")}</textarea></label>
@@ -1600,6 +1614,30 @@ function renderModal(){
     cs.addEventListener("change",()=>{ a.cls=cs.value; a.typeId=""; tsel.innerHTML=typeOpts(a.cls); document.getElementById("ac-newtype-wrap").style.display="none"; a.monetary=(a.cls!=="equity"); paintMon(); });   // reset the monetary default to match the new class
     tsel.addEventListener("change",()=>{ a.typeId=tsel.value; document.getElementById("ac-newtype-wrap").style.display=(tsel.value==="__new")?"":"none"; });
     setTimeout(()=>document.getElementById("ac-name")?.focus(),30);
+  } else if(UI.modal.kind==="convert"){
+    const acc=acctById(UI.modal.id), src=accCur(acc), d=UI.modal.draft;
+    const c=computeConversion(UI.modal.id,d.target,d.monetary);
+    const legRow=l=>`<tr><td>${esc(l.label)}</td><td class="num">${l.debit?money(l.debit,l.cur):"·"}</td><td class="num">${l.credit?money(l.credit,l.cur):"·"}</td></tr>`;
+    root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:480px" role="dialog" aria-modal="true">
+      <div class="modal-h"><h3>Convert currency</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
+      <div class="modal-b">
+        <p class="muted" style="font-size:13px;margin:0">Move <b>${esc(acc.name)}</b> from <b>${esc(src)}</b> to another currency. This posts a dated entry at today's rate and archives the ${esc(src)} account — its history stays intact and visible.</p>
+        <label class="field"><span>Convert to</span>${curField("cv-cur",d.target)}</label>
+        <div class="field"><span>Treatment <span class="infodot" data-tip="Monetary (cash-like): valued at today's rate, and the gap from its book value is booked as a realized FX gain or loss. Non-monetary (equity, physical assets): carried at historical cost — re-stated at the same value, no gain or loss. Defaulted from the account's Kind.">&#9432;</span></span>
+          <div class="themeseg" id="cv-mode" role="group" aria-label="Treatment">${[[true,"Monetary"],[false,"Non-monetary"]].map(([k,l])=>`<button type="button" class="${d.monetary===k?"on":""}" data-action="convert-mode" data-mon="${k}">${l}</button>`).join("")}</div></div>
+        ${c.ok?`<div class="convprev">
+            <div class="muted" style="font-size:12px;margin-bottom:8px">Today: 1 ${esc(src)} = ${fmtRate(c.crossRate)} ${esc(d.target)}</div>
+            <table class="convtbl"><thead><tr><th>Line</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>${c.legs.map(legRow).join("")}</tbody></table>
+            ${d.monetary
+              ? (Math.abs(c.fx)>=0.005
+                  ? `<div class="convnote">Realized FX ${c.fx>0?"loss":"gain"}: <b>${money(Math.abs(c.fx),c.veh)}</b> → posted to “Foreign exchange gain/loss” (created if needed).</div>`
+                  : `<div class="convnote">No FX gain/loss — book value already equals today's value.</div>`)
+              : `<div class="convnote">Non-monetary: frozen value preserved (${money(Math.abs(c.V),c.veh)}), no gain or loss.</div>`}
+          </div>`
+          : `<div class="convnote warn">${src===d.target?"Pick a different currency to convert to.":(Math.abs(c.N)<=0.005?"This account has a zero balance — nothing to convert.":"Can't convert — a rate is missing for one of these currencies. Fetch rates first.")}</div>`}
+      </div>
+      <div class="modal-f"><div style="flex:1"></div><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="convert-confirm" ${c.ok?"":"disabled"}>Convert</button></div>
+    </div></div>`;
   } else if(UI.modal.kind==="type"){
     const t=UI.modal.draft;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:400px" role="dialog" aria-modal="true">
@@ -2150,6 +2188,9 @@ document.addEventListener("click",e=>{
     case "conflict-reload": location.reload(); break;
     case "conflict-overwrite": if(STORE&&S) STORE.save(S,"force"); dismissModal(); break;
     case "save-acct": saveAcct(); break;
+    case "convert-open": { const acc=acctById(UI.modal.id); const tgt=(base()!==accCur(acc)?base():(accCur(acc)!=="USD"?"USD":"EUR")); UI.modal={kind:"convert",id:UI.modal.id,draft:{target:tgt,monetary:!!acc.monetary}}; renderModal(); break; }
+    case "convert-mode": if(UI.modal&&UI.modal.draft){ UI.modal.draft.monetary=(el.dataset.mon==="true"); renderModal(); } break;
+    case "convert-confirm": applyConversion(); break;
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "rm-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.splice(+el.dataset.i,1); if(UI.modal.draft.lines.length<2)UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
     case "acct-open": { const i=+el.dataset.i; syncLines(); UI.acctPickOpen=(UI.acctPickOpen===i?null:i); UI.acctPickFilter=""; renderModal(); if(UI.acctPickOpen===i){ positionAcctPanel(i); const f=document.getElementById("acctfilter"); if(f) f.focus(); } break; }
@@ -2176,6 +2217,7 @@ document.addEventListener("click",e=>{
       if(cid==="cur-pick"){ S.settings.currency=val; if(S.settings.rates[val]==null)S.settings.rates[val]=1; save(); render(); }
       else if(cid==="na-cur"){ if(UI.sub) UI.sub.draft.currency=val; renderModal(); }
       else if(cid==="ac-cur"){ if(UI.modal&&UI.modal.draft) UI.modal.draft.currency=val; renderModal(); }
+      else if(cid==="cv-cur"){ if(UI.modal&&UI.modal.draft) UI.modal.draft.target=val; renderModal(); }
       else { const inp=document.getElementById(cid); if(inp){ inp.value=val; inp.dispatchEvent(new Event("change",{bubbles:true})); } (UI.modal?renderModal():render()); }
       break; }
     case "date-prev": case "date-next": { const dir=(a==="date-next"?1:-1); const mode=UI.dateMode||"days"; let [y,m]=(UI.dateView||(UI.modal.draft.date||todayAccounting()).slice(0,7)).split("-").map(Number);
@@ -2396,6 +2438,59 @@ function saveAcct(){
 function delAccount(id){
   if(S.transactions.some(t=>t.lines.some(l=>l.accountId===id))){ toast("This account is used in the ledger — remove those entries first."); return; }
   askConfirm("Delete this account?", ()=>{ S.accounts=S.accounts.filter(a=>a.id!==id); save(); render(); });
+}
+/* ---- currency conversion of an existing account -------------------------------------------------
+   Changing an account's currency in place would silently restate its history (a 1,000 CAD balance is
+   not 1,000 USD). The professional move is to move the balance to a NEW account in the target currency
+   with a dated transfer at today's rate, and archive the old one — history stays in its own currency.
+   Monetary accounts realize the FX gain/loss (book value vs today's value); non-monetary ones (equity,
+   physical assets) carry the frozen value forward with no gain/loss. */
+function acctHasEntries(id){ return S.transactions.some(t=>!t.deleted && (t.lines||[]).some(l=>l.accountId===id)); }
+function acctNativeBal(id){ let n=0; for(const t of S.transactions){ if(t.deleted) continue; for(const l of (t.lines||[])) if(l.accountId===id) n+=(l.debit||0)-(l.credit||0); } return round2(n); }
+function acctFrozenVehicle(id){ let v=0; for(const t of S.transactions){ if(t.deleted) continue; for(const l of (t.lines||[])) if(l.accountId===id) v+=((l.debit||0)-(l.credit||0))*lineRate(l); } return round2(v); }
+const fmtRate=x=>{ if(!isFinite(x)||x<=0) return "—"; return (x>=1?(+x.toFixed(4)):(+x.toPrecision(4))).toString(); };
+function computeConversion(accId,target,monetary){
+  const acc=acctById(accId), src=accCur(acc);
+  const N=acctNativeBal(accId), V=acctFrozenVehicle(accId);
+  const rS=rateUSD(src), rT=rateUSD(target);
+  const ok = !!acc && src!==target && rS>0 && rT>0 && Math.abs(N)>0.005;
+  const costBasis = N!==0 ? V/N : rS;                 // weighted-average frozen rate → closing leg zeroes native AND frozen value
+  const Vtoday = round2(N*rS);                         // today's value of the native balance, in the vehicle
+  const newNative = monetary ? round2(N*rS/rT) : round2(V/rT);
+  const fx = monetary ? round2(V - Vtoday) : 0;        // + = realized loss, − = realized gain
+  const veh=vehicle();
+  const legs=[
+    {label:acc?acc.name:"—", cur:src, debit: N<0?round2(-N):0, credit: N>0?round2(N):0, rate:round4(costBasis), kind:"close"},
+    {label:(acc?acc.name:"—")+" · "+target, cur:target, debit: N>0?round2(newNative):0, credit: N<0?round2(-newNative):0, rate:round4(rT), kind:"open"},
+  ];
+  if(monetary && Math.abs(fx)>=0.005)
+    legs.push({label:"Foreign exchange "+(fx>0?"loss":"gain"), cur:veh, debit: fx>0?fx:0, credit: fx<0?round2(-fx):0, rate:round4(rateUSD(veh)), kind:"fx"});
+  return {ok,src,target,monetary,N,V,rS,rT,costBasis,Vtoday,newNative,fx,veh,legs,crossRate: rT>0? rS/rT : 0};
+}
+function ensureFxAccount(){
+  let a=S.accounts.find(x=>!x.deleted && x.name==="Foreign exchange gain/loss" && classOf(x)==="equity");
+  if(a) return a;
+  let ty=S.types.find(t=>t.class==="equity");
+  if(!ty){ ty={id:uid(),name:"Equity",class:"equity"}; S.types.push(ty); }
+  a={id:uid(),name:"Foreign exchange gain/loss",typeId:ty.id,currency:vehicle(),monetary:false,comment:"Auto-created: realized FX gain/loss from currency conversions."};
+  S.accounts.push(a); return a;
+}
+function applyConversion(){
+  const acc=acctById(UI.modal.id), d=UI.modal.draft;
+  const c=computeConversion(UI.modal.id,d.target,d.monetary);
+  if(!c.ok){ toast("Pick a different target currency."); return; }
+  if(S.settings.rates[d.target]==null) S.settings.rates[d.target]=1;
+  const na={id:uid(),name:acc.name,typeId:acc.typeId,currency:d.target,comment:acc.comment||"",monetary:!!acc.monetary};
+  S.accounts.push(na);
+  const fxAcc=(d.monetary && Math.abs(c.fx)>=0.005)?ensureFxAccount():null;
+  const idFor=l=> l.kind==="close"?acc.id : l.kind==="open"?na.id : fxAcc.id;
+  const lines=c.legs.map(l=>({accountId:idFor(l),debit:round2(l.debit||0),credit:round2(l.credit||0),rate:l.rate}));
+  const tx={id:uid(),date:todayAccounting(),description:`Convert ${acc.name}: ${c.src} → ${c.target}`,
+    createdAt:new Date().toISOString(),vehicle:vehicle(),lines};
+  S.transactions.push(tx); logAudit("create",tx.id,{desc:tx.description});
+  acc.deleted=true; acc.deletedAt=new Date().toISOString();            // archive the old account; its history stays referenced & visible
+  save(); render(); dismissModal();
+  toast(`Converted ${acc.name} to ${c.target}.`);
 }
 function saveType(){
   const name=document.getElementById("ty-name").value.trim();
