@@ -79,6 +79,87 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/ledgers:
+    get:
+      summary: List the ledger registry
+      description: All ledgers the server knows, which one is current, the identity-colour palette, and which colours are taken.
+      responses:
+        "200":
+          description: The registry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ledgersRoot: { type: string, description: Folder where new ledgers are created }
+                  current: { type: string, description: id of the current ledger }
+                  palette:
+                    type: array
+                    items: { type: string, example: "#2f7d5b" }
+                  usedColors:
+                    type: array
+                    items: { type: string }
+                  ledgers:
+                    type: array
+                    items: { $ref: "#/components/schemas/LedgerEntry" }
+    post:
+      summary: Create a new ledger and switch to it
+      description: Creates an empty ledger file under ledgersRoot, assigns an unused identity colour (or the one supplied, if free), and makes it current.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "Business" }
+                color: { type: string, description: Optional; must be unused, else 409 }
+      responses:
+        "200":
+          description: Created and switched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, id: { type: string }, current: { type: string } }
+        "409":
+          description: Requested colour already in use
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    put:
+      summary: Mutate a ledger — switch, rename, recolour, or remove
+      description: >
+        op=switch makes id current; op=rename sets its name; op=color sets its identity colour
+        (409 if that colour is used by another ledger); op=remove unregisters it (the file on disk is
+        left untouched) and falls back to another ledger, creating a default one if none remain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [op, id]
+              properties:
+                op: { type: string, enum: [switch, rename, color, remove] }
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, current: { type: string } }
+        "404": { description: No such ledger }
+        "409":
+          description: Colour already in use
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/book:
     get:
       summary: Read the whole ledger
@@ -201,6 +282,16 @@ components:
             icloud: { type: string }
             home: { type: string }
             cwd: { type: string }
+    LedgerEntry:
+      type: object
+      description: One ledger in the registry (the registry lives in config.json, not in a ledger file).
+      properties:
+        id: { type: string }
+        name: { type: string, example: "Personal" }
+        path: { type: string }
+        color: { type: string, example: "#2f7d5b", description: Unique identity colour }
+        exists: { type: boolean }
+        current: { type: boolean }
     Error:
       type: object
       properties:
@@ -232,7 +323,9 @@ components:
               name: { type: string }
               typeId: { type: string }
               currency: { type: string, example: "USD" }
+              monetary: { type: boolean, description: Cash-like (revalued by FX) vs carried at historical cost }
               comment: { type: string }
+              deleted: { type: boolean, description: Soft-deleted (archived after a currency conversion) }
         transactions:
           type: array
           items:
@@ -243,6 +336,7 @@ components:
               date: { type: string, format: date }
               description: { type: string }
               comment: { type: string }
+              vehicle: { type: string, example: "USD", description: Pivot currency the frozen leg rates are expressed in }
               lines:
                 type: array
                 items:
@@ -252,12 +346,15 @@ components:
                     accountId: { type: string }
                     debit: { type: number }
                     credit: { type: number }
+                    rate: { type: number, description: Frozen value of 1 unit of the leg's currency in the vehicle, at save time }
         settings:
           type: object
           properties:
-            currency: { type: string, example: "USD" }
+            currency: { type: string, example: "USD", description: Display/base currency }
+            vehicle: { type: string, example: "USD", description: Pivot currency for cross-conversions }
             rates:
               type: object
               additionalProperties: { type: number }
             ratesUpdated: { type: string }
             theme: { type: string, enum: [auto, light, dark] }
+            font: { type: string, description: Per-ledger font choice }
