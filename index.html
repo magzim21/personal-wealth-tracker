@@ -1883,7 +1883,7 @@ function renderModal(){
       ci.addEventListener("change",()=>{ ledgerOp("color",ci.dataset.id,{color:ci.value}).then(ok=>{ if(ok){ UI.modal.colorFor=null; applyLedgerAccent(); render(); } renderModal(); }); }); }
     const nn=document.getElementById("lnew-name"), na=document.getElementById("lnew-add");
     const syncAdd=()=>{ if(UI.modal) UI.modal.newName=nn?nn.value:""; if(na) na.disabled=!(nn&&nn.value.trim()); };
-    if(nn){ nn.addEventListener("input",syncAdd); nn.addEventListener("keydown",e=>{ if(e.key==="Enter"&&nn.value.trim()){ e.preventDefault(); createLedger(nn.value); } }); }
+    if(nn){ nn.addEventListener("input",syncAdd); nn.addEventListener("keydown",e=>{ if(e.key==="Enter"&&nn.value.trim()){ e.preventDefault(); createLedger(nn.value, UI.modal&&UI.modal.newDir); } }); }
     syncAdd();
     root.querySelectorAll(".lpath .lptext").forEach(t=>{ t.scrollLeft=t.scrollWidth; });   // start scrolled to the end so the filename shows (no bidi reordering)
   } else if(UI.modal.kind==="type"){
