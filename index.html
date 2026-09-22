@@ -433,9 +433,11 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 /* compact ledger postings: no per-card header/footer rows, single Dr/Cr amount column */
 .txcard table.txlines td{padding:4px 14px;font-size:13px;border-bottom:0}
 .txcard table.txlines .acct{width:100%}
-.txcard table.txlines .drcr{font-family:var(--fs-mono);font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--faint);text-align:right;padding-right:8px;white-space:nowrap}
-.txcard table.txlines .num{white-space:nowrap;min-width:88px}
-.txcard table.txlines tr:first-child td{padding-top:7px}
+.txcard table.txlines th{font-family:var(--fs-mono);font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);padding:6px 14px 3px;text-align:right;white-space:nowrap}
+.txcard table.txlines th.acct{text-align:left}
+.txcard table.txlines .num{white-space:nowrap;min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
+.txcard table.txlines .lnative{font-family:var(--fs-mono);font-size:11px;color:var(--faint);white-space:nowrap;margin-left:6px}
+.txcard table.txlines tbody tr:first-child td{padding-top:6px}
 .txcard table.txlines tr:last-child td{padding-bottom:8px}
 .txnote{padding:7px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;white-space:pre-wrap}
 
@@ -1229,6 +1231,10 @@ function viewAccounts(){
 }
 
 function txAmount(t){ return round2(convert(txUSD(t),t.vehicle||"USD",base())); }   // frozen magnitude (in the entry's own vehicle) shown in the current display base
+// One line's value in the display (reporting) currency, at the entry's frozen rate. Debits and credits
+// computed this way are EQUAL for a balanced entry — so the two columns tally like a real journal, even
+// when the legs are in different currencies. The native amount is shown separately as a reference.
+function lineBaseVal(t,l){ const amt=(l.debit||0)||(l.credit||0); return round2(convert(amt*lineRate(l),t.vehicle||"USD",base())); }
 function sortTxs(arr){
   const s=UI.ledgerSort||"date-desc";
   const ord=new Map(S.transactions.map((t,i)=>[t.id,i])); // insertion order: later index = more recently added
@@ -1530,8 +1536,10 @@ function renderTxCard(t){
            :`<button class="iconbtn" data-action="edit-tx" data-id="${t.id}" title="Edit">${I.edit}</button><button class="iconbtn" data-action="del-tx" data-id="${t.id}" title="Delete">${I.trash}</button>`}
     </div>
     <table class="txlines">
-      <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);
-        return `<tr><td class="acct">${a?esc(a.name):"—"}${c!==base()?` <span class="curtag">${c}</span>`:''}</td><td class="drcr">${isDr?"Dr":"Cr"}</td><td class="num">${fmt(amt,c)}</td></tr>`;}).join("")}</tbody>
+      <thead><tr><th class="acct"></th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+      <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);const bv=lineBaseVal(t,l);
+        const native=c!==base()?` <span class="lnative">${fmtGroup(amt)} ${esc(c)}</span>`:"";
+        return `<tr><td class="acct">${a?esc(a.name):"—"}${native}</td><td class="num dr">${isDr?money(bv,base()):""}</td><td class="num cr">${isDr?"":money(bv,base())}</td></tr>`;}).join("")}</tbody>
     </table>
     ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
   </div>`;
