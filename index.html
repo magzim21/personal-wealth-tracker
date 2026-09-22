@@ -637,8 +637,11 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .balrow.bad .balverdict{color:#b0741a}
 .balrow.multi{flex-direction:column;align-items:stretch;max-height:none;gap:8px;overflow:visible}
 .balrow .baltop{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.balfx{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:8px}
+#balfx-panel:not(:empty){background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;margin-top:8px}
+.balfx{display:flex;flex-direction:column;gap:8px}
 .balfx-msg{font-size:12px;color:var(--muted);line-height:1.5}
+.fxlink{border:0;background:none;color:var(--accent-ink);font:inherit;font-weight:700;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+.fxlink:hover{opacity:.8}
 .fxblock{display:flex;flex-direction:column;gap:2px}
 .fxhead{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:1px}
 .fxline{font-size:12px;color:var(--ink)}
@@ -1618,7 +1621,10 @@ function softDeleteTx(did){
 /* animate the modal out, then clear it and run an optional callback */
 function dismissModal(cb){
   const ov=document.querySelector(".overlay");
-  const finish=()=>{ pendingConfirm=null; UI.modal=null; UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; UI.curOpen=null; renderModal(); if(cb){ try{ cb(); }catch(e){} } };
+  const finish=()=>{ pendingConfirm=null; UI.acctPickOpen=null; UI.acctPickFilter=""; UI.datePickOpen=false; UI.curOpen=null;
+    if(UI.modalStash){ UI.modal=UI.modalStash; UI.modalStash=null; }   // a sub-modal (e.g. rates opened from a tx) closed — return to the stashed draft
+    else UI.modal=null;
+    renderModal(); if(cb){ try{ cb(); }catch(e){} } };
   if(!ov || window.matchMedia("(prefers-reduced-motion:reduce)").matches){ finish(); return; }
   ov.classList.add("closing");
   setTimeout(finish,160);
@@ -2184,6 +2190,7 @@ go run server.go          # Go</pre>
           <button class="btn sm" data-action="add-line" style="margin-top:8px">${I.plus}Add line</button>${d.lines.length===2?`<button class="btn sm" data-action="auto-balance" style="margin-top:8px;margin-left:8px" title="Fill the empty side so the entry balances">Auto-balance</button>`:""}
         </div>
         <div class="balrow" id="balrow"></div>
+        <div id="balfx-panel"></div>
         <label class="field"><span>Comment <span style="font-weight:400;color:var(--faint)">— optional</span></span><textarea id="tx-comment" rows="2" placeholder="Notes about this entry">${esc(d.comment||"")}</textarea></label>
         ${UI.modal.id&&d.createdAt?`<div class="muted" style="font-size:11.5px;margin-top:-2px">Entered ${esc(fmtCreated(d.createdAt))}</div>`:""}
         ${orConnected()
@@ -2512,7 +2519,12 @@ function updateBal(){
         +(unset?` <button type="button" class="fxfetch" data-action="fetch-rates">no live rate &mdash; fetch now</button>`:"")+`</div>`;
     }).join("");
     const legs=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0))).map(l=>{ const a=acctById(l.accountId),c=accCur(a),amt=(l.debit||0)||(l.credit||0);
-      return `<div class="fxleg"><span>${l.debit>0?"Debit":"Credit"} ${esc(a?a.name:"")}</span><span><b>${fmtGroup(amt)} ${esc(c)}</b> &rarr; ${money(convert(amt,c,veh),veh)}</span></div>`;
+      // Full path: the raw amount, its value in the pivot, then in your display currency. Skip any hop
+      // that would be an identity (a pivot-currency leg, or a display==pivot book).
+      let chain=`<b>${fmtGroup(amt)} ${esc(c)}</b>`;
+      if(c!==veh) chain+=` &rarr; ${money(convert(amt,c,veh),veh)}`;
+      if(c!==base() && base()!==veh) chain+=` &rarr; ${money(convert(amt,c,base()),base())}`;
+      return `<div class="fxleg"><span>${l.debit>0?"Debit":"Credit"} ${esc(a?a.name:"")}</span><span>${chain}</span></div>`;
     }).join("");
     const nonVeh=curs.filter(c=>c!==veh);
     let lead;
@@ -2520,21 +2532,24 @@ function updateBal(){
       const between = nonVeh.length===2
         ? `direct ${esc(nonVeh[0])} &harr; ${esc(nonVeh[1])} rate`
         : `direct rate among ${nonVeh.map(esc).join(", ")}`;
-      lead = `There's no ${between}, so this entry balances through the vehicle currency <b>${esc(veh)}</b>.`;
+      lead = `There's no ${between}, so this entry balances through the vehicle currency <button type="button" class="fxlink" data-action="fx-settings">${esc(veh)}</button>.`;
     } else {
-      lead = `This entry balances through the vehicle currency <b>${esc(veh)}</b>.`;
+      lead = `This entry balances through the vehicle currency <button type="button" class="fxlink" data-action="fx-settings">${esc(veh)}</button>.`;
     }
     fx=`<div class="balfx"><div class="balfx-msg">${lead} These rates freeze onto the entry when you save.</div>`
       +`<div class="fxblock"><div class="fxhead">Rates used (via ${esc(veh)})</div>${rl}</div>`
-      +`<div class="fxblock"><div class="fxhead">Each leg &rarr; ${esc(veh)}</div>${legs}</div></div>`;
+      +`<div class="fxblock"><div class="fxhead">Each leg</div>${legs}</div></div>`;
   }
-  row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""))+(multi?" multi":"");
+  row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""));
   // Only show a "Debits X / Credits Y" total when the whole entry is in ONE currency, where it's the
   // real amount. Across currencies, collapsing both sides into a single pivot figure is misleading
   // (you entered 20,000 UAH and 628 CAD, not "$448") \u2014 so show only the verdict; the leg rows carry
   // the actual per-currency amounts.
   const totals = multi ? "" : `Debits <strong class="num">${money(dr,calc)}</strong> &middot; Credits <strong class="num">${money(cr,calc)}</strong> <span style="color:var(--faint)">(${esc(calc)})</span>`;
-  row.innerHTML=`<div class="baltop"><span>${totals}</span><span class="balverdict">${ok?"\u2713 Balanced":"Off by "+money(Math.abs(diff),calc)}</span></div>${fx}`;
+  // The verdict is the STATUS (kept in the coloured balrow); the cross-currency breakdown is reference
+  // material, shown in a separate neutral panel below so "Balanced" never reads as part of it.
+  row.innerHTML=`<div class="baltop"><span>${totals}</span><span class="balverdict">${ok?"\u2713 Balanced":"Off by "+money(Math.abs(diff),calc)}</span></div>`;
+  const panel=document.getElementById("balfx-panel"); if(panel) panel.innerHTML=(multi&&!pristine)?fx:"";
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
 /* ---- actions ---- */
@@ -2559,6 +2574,12 @@ window.addEventListener("hashchange",async()=>{
   if(first && !HASH_VIEWS.includes(first)){ const led=ledgerBySlug(first); if(led && curLedger() && led.id!==curLedger().id){ await openLedger(led.id); applyHash(); render(); return; } }
   applyHash(); render();
 });
+// Remember where each press STARTED, so an overlay dismiss can require both the press and the release
+// to land on the backdrop. A click event fires on the overlay even when the mousedown began inside an
+// input (the overlay is the common ancestor) — e.g. selecting text and dragging past the modal edge —
+// which used to close the modal and lose the draft. Different events; treat them differently.
+let _pressTarget=null;
+document.addEventListener("mousedown",e=>{ _pressTarget=e.target; },true);
 document.addEventListener("click",e=>{
   // Privacy Mode: with amounts blurred, a click on any number reveals just that one (for screenshots).
   if(UI.privacy){ const amt=e.target.closest(".cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount"); if(amt){ amt.classList.toggle("revealed"); return; } }
@@ -2612,6 +2633,7 @@ document.addEventListener("click",e=>{
       const nF=(UI.ledgerAccount?1:0)+((UI.amtOp&&!isNaN(parseFloat(UI.amtVal)))?1:0);
       el.classList.toggle("on", UI.filtersOpen||nF>0); el.setAttribute("aria-expanded",UI.filtersOpen); break; }
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
+    case "fx-settings": syncLines(); UI.modalStash=UI.modal; UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;   // open rates from a tx; closing returns to the draft
     case "fetch-rates": fetchRates(); break;
     case "open-data": UI.orCustom=false; UI.modal={kind:"data"}; renderModal(); break;
     case "save-location": saveLocation(); break;
@@ -2627,7 +2649,7 @@ document.addEventListener("click",e=>{
     case "toast-undo": { const f=toastUndoFn; toastUndoFn=null; const r=document.getElementById("toast-root"); if(r) r.innerHTML=""; clearTimeout(toastT); if(f) f(); break; }
     case "restore-tx": { const t=S.transactions.find(x=>x.id===id); if(t){ delete t.deleted; delete t.deletedAt; logAudit("restore",id,{desc:t.description}); save(); render(); } break; }
     case "close": dismissModal(); break;
-    case "overlay": if(e.target===el){ dismissModal(); } break;
+    case "overlay": if(e.target===el && _pressTarget===el){ dismissModal(); } break;   // dismiss only on a true backdrop click — press AND release both on the overlay, not a text-drag that ends here
     case "confirm-yes": { const chk=document.getElementById("confirm-chk"), v=!!(chk&&chk.checked), fn=pendingConfirm; dismissModal(fn?()=>fn(v):null); break; }
     case "conflict-reload": location.reload(); break;
     case "conflict-overwrite": if(STORE&&S) STORE.save(S,"force"); dismissModal(); break;
