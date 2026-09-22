@@ -567,7 +567,7 @@ table.register thead th{background:var(--surface-2)}
 /* ==== custom, colour-coded account picker (replaces the native <select> — long chart of accounts,
    keyed to class colour like the Accounts view; panel is position:fixed so the modal's overflow can't clip it) ==== */
 .acctpick{position:relative;flex:1;min-width:0}
-.acctpick-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.acctpick-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font:inherit;font-size:13.5px;line-height:1.35;color:var(--ink);cursor:pointer;text-align:left}
 .acctpick-btn:hover{border-color:var(--muted)}
 .acctpick.open .acctpick-btn{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 .acctpick-dot{width:9px;height:9px;border-radius:3px;background:var(--c,transparent);flex:none}
@@ -2191,7 +2191,10 @@ go run server.go          # Go</pre>
         <div class="legs${d.lines.length>2?" has-x":""}">
           <div class="linehead"><span>Account</span><span class="r">Debit</span><span class="r">Credit</span>${d.lines.length>2?"<span></span>":""}</div>
           <div class="lines" id="lines">${d.lines.map((l,i)=>lineRow(l,i)).join("")}</div>
-          <button class="btn sm" data-action="add-line" style="margin-top:8px">${I.plus}Add line</button>${d.lines.length===2?`<button class="btn sm" data-action="auto-balance" style="margin-top:8px;margin-left:8px" title="Fill the empty side so the entry balances">Auto-balance</button>`:""}
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <button class="btn sm" data-action="add-line">${I.plus}Add line</button>
+            ${d.lines.length===2?`<button class="btn sm" data-action="auto-balance" style="margin-left:auto" title="Fill the empty side so the entry balances">Auto-balance</button>`:""}
+          </div>
         </div>
         <div class="balrow" id="balrow"></div>
         <div id="balfx-panel"></div>
@@ -2479,6 +2482,24 @@ function autoBalanceLegs(){
   O[opp]=otherAmt; O[srcSide]=0; O._auto=true;
   return true;
 }
+// Would Auto-balance actually change anything? (both accounts set, one leg has an amount, the other's
+// balancing side is empty or a stale auto-fill, and the computed amount differs from what's there.)
+// Used to hide the button when clicking it would be a no-op.
+function canAutoBalance(){
+  const d=UI.modal&&UI.modal.draft; if(!d||d.lines.length!==2) return false;
+  const A=d.lines[0], B=d.lines[1];
+  if(!A.accountId||!B.accountId) return false;
+  const srcIdx = ((A.debit||0)||(A.credit||0)) ? 0 : ((((B.debit||0)||(B.credit||0))) ? 1 : -1);
+  if(srcIdx<0) return false;
+  const Src=d.lines[srcIdx], O=d.lines[1-srcIdx];
+  const srcSide = (Src.debit||0)>0 ? "debit" : "credit";
+  const opp = srcSide==="debit" ? "credit" : "debit";
+  if((O[opp]||0)>0 && !O._auto) return false;
+  const amt=Src[srcSide]; if(!(amt>0)) return false;
+  const otherAmt=round2(convert(amt, accCur(acctById(Src.accountId)), accCur(acctById(O.accountId))));
+  if(!(otherAmt>0)) return false;
+  return round2(O[opp]||0)!==otherAmt;
+}
 function syncLines(){
   const d=UI.modal.draft;
   d.date=document.getElementById("tx-date").value;
@@ -2547,6 +2568,7 @@ function updateBal(){
   // material, shown in a separate neutral panel below so "Balanced" never reads as part of it.
   row.innerHTML=`<div class="baltop"><span>${totals}</span><span class="balverdict">${ok?"\u2713 Balanced":"Off by "+money(Math.abs(diff),calc)}</span></div>`;
   const panel=document.getElementById("balfx-panel"); if(panel) panel.innerHTML=(multi&&!pristine)?fx:"";
+  const ab=document.querySelector('[data-action="auto-balance"]'); if(ab) ab.style.display=canAutoBalance()?"":"none";   // hide when clicking would change nothing
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
 /* ---- actions ---- */
