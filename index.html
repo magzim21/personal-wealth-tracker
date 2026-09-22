@@ -1827,10 +1827,10 @@ function renderModal(){
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:470px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>Ledgers</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        <p class="muted" style="font-size:12.5px;margin:0">Each ledger is its own book — its own accounts, entries, currency, theme and font. Click a file path to copy it.</p>
+        <p class="muted" style="font-size:12.5px;margin:0">Each ledger is its own book — its own accounts, transactions, currency, theme and font. Click a file path to copy it.</p>
         <div class="ldglist">${(L.ledgers||[]).map(row).join("")}</div>
         <div class="lnewrow"><input type="text" id="lnew-name" placeholder="New ledger name" spellcheck="false" value="${escAttr(UI.modal.newName||"")}"><button class="btn primary sm" id="lnew-add" data-action="ledger-new" disabled>＋ Create</button></div>
-        <div class="lnewdir">Saved in <button type="button" class="linkbtn" data-action="ledger-dir-pick" title="${escAttr(UI.modal.newDir||L.ledgersRoot||"")}">${esc(dirLabel(UI.modal.newDir||L.ledgersRoot))}</button>${UI.modal.newDir?` · <button type="button" class="linkbtn" data-action="ledger-dir-reset">use default</button>`:""}</div>
+        <div class="lnewdir">New ledger will be created in <button type="button" class="linkbtn" data-action="ledger-dir-pick" title="${escAttr(UI.modal.newDir||L.ledgersRoot||"")}">${esc(dirLabel(UI.modal.newDir||L.ledgersRoot))}</button>${UI.modal.newDir?` · <button type="button" class="linkbtn" data-action="ledger-dir-reset">use default</button>`:""}</div>
       </div>
       <div class="modal-f"><div style="flex:1"></div><button class="btn primary" data-action="close">Done</button></div>
     </div></div>`;
