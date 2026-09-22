@@ -48,6 +48,10 @@ jobs:
       - name: OpenAPI in sync
         run: node scripts/check-openapi.mjs
 
+      # 2b2. the embedded SERVER_MJS/SERVER_GO copies (for the .zip download) must match the real files
+      - name: Embedded server copies in sync
+        run: node scripts/sync-embedded.mjs --check
+
       # 2c. AI feature must never be able to send figures to the model
       - name: AI redaction gates intact
         run: node scripts/check-ai-redaction.mjs

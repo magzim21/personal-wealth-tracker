@@ -102,6 +102,16 @@ paths**):
 Your choice is remembered between restarts. The ledger file is deliberately **git-ignored**
 — your finances never end up in the repository (a commit hook and CI enforce this).
 
+#### Many ledgers
+
+You can keep **any number of separate books** — personal, business, a shared household — each
+its own file with its own accounts, currency, theme, font and a unique identity colour. The
+current ledger's name sits under the logo; click it to switch, create, rename, recolour or
+remove ledgers. New ones are created under a **ledgers root** (your iCloud `PersonalWealthTracker`
+folder when iCloud Drive is present, else `~/PersonalWealthTracker`). The registry lives in
+`.pwt/config.json`; an older single-ledger setup is migrated into it automatically, in place —
+no file is moved. Removing a ledger only unregisters it; the file stays on disk.
+
 ### Exchange rates (optional)
 
 Fiat rates work out of the box from a free source. For crypto and metals (BTC, XAU, XAG)
