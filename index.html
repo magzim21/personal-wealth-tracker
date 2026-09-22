@@ -631,12 +631,13 @@ button[data-tip],a[data-tip]{cursor:pointer}
    neutral background with a soft amber "off by", green only once it actually balances. */
 .balrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r-sm);font-size:13px;background:var(--surface-2);overflow:hidden;max-height:60px;transition:max-height .22s ease,opacity .2s ease,padding .22s ease,margin-top .22s ease}
 .balrow.hidden{max-height:0;opacity:0;padding-top:0;padding-bottom:0;margin-top:-14px}
-.balrow.ok{background:var(--accent-soft)}
+.balrow.ok{background:linear-gradient(90deg,transparent 0%,var(--accent-soft) 65%)}
+.balrow.bad{background:linear-gradient(90deg,transparent 0%,rgba(176,116,26,.12) 65%)}
 .balrow .balverdict{font-weight:600;color:var(--muted)}
 .balrow.ok .balverdict{color:var(--accent-ink)}
 .balrow.bad .balverdict{color:#b0741a}
 .balrow.multi{flex-direction:column;align-items:stretch;max-height:none;gap:8px;overflow:visible}
-.balrow .baltop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.balrow .baltop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:1}
 #balfx-panel:not(:empty){background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;margin-top:8px}
 .balfx{display:flex;flex-direction:column;gap:8px}
 .balfx-msg{font-size:12px;color:var(--muted);line-height:1.5}
