@@ -2467,37 +2467,41 @@ function syncLines(){
 function rateLooksUnset(c){ return c!==vehicle() && c!==base() && rateUSD(c)===1; }
 function updateBal(){
   const d=UI.modal.draft;
+  const curs=[...new Set(d.lines.map(l=>{const a=acctById(l.accountId);return a?accCur(a):null;}).filter(Boolean))];
+  const multi=curs.length>1;
+  const veh=vehicle();
+  // A transaction balances in its OWN terms, never in whatever currency you are viewing: a
+  // single-currency entry balances in that currency; a cross-currency entry balances in the pivot
+  // (the anchor the rates are quoted in). The display currency is deliberately not involved here.
+  const calc=multi?veh:(curs[0]||base());
   let dr=0,cr=0;
-  d.lines.forEach(l=>{const a=acctById(l.accountId);const c=a?accCur(a):base();dr+=toBase(l.debit||0,c);cr+=toBase(l.credit||0,c);});
+  d.lines.forEach(l=>{const a=acctById(l.accountId);const c=a?accCur(a):calc;dr+=convert(l.debit||0,c,calc);cr+=convert(l.credit||0,c,calc);});
   dr=round2(dr);cr=round2(cr);
   const diff=round2(dr-cr);
   const tol=Math.max(0.01,0.005*Math.max(dr,cr)); // absorb cross-currency rate rounding
   const ok=Math.abs(diff)<=tol && dr>0;
   const row=document.getElementById("balrow");
-  const pristine=!dr && !cr;   // nothing entered yet — keep the row collapsed (it eases open once you type)
-  const curs=[...new Set(d.lines.map(l=>{const a=acctById(l.accountId);return a?accCur(a):null;}).filter(Boolean))];
-  const multi=curs.length>1;   // cross-currency — show the full conversion, never make the user guess
-  const veh=vehicle();
+  const pristine=!dr && !cr;   // nothing entered yet
   if(multi) fetchRatesQuiet();   // proactive: any cross-currency entry refreshes the live rates in the background
   let fx="";
   if(multi){
-    const rl=curs.filter(c=>c!==base()).map(c=>{ const unset=rateLooksUnset(c);
-      return `<div class="fxline${unset?" warn":""}">1 <b>${esc(c)}</b> = ${fmtRate(convert(1,c,base()))} ${esc(base())}`
-        +(c!==base()?` <span class="faint">· 1 ${esc(c)} = ${fmtRate(rateUSD(c)/rateUSD(veh))} ${esc(veh)}</span>`:"")
-        +(unset?` <button type="button" class="fxfetch" data-action="fetch-rates">no live rate — fetch now</button>`:"")+`</div>`;
+    // Both hops of the pivot chain matter equally: source to vehicle AND vehicle to destination.
+    // Show each currency against the pivot both ways; never the misleading direct source to destination.
+    const rl=curs.filter(c=>c!==veh).map(c=>{ const unset=rateLooksUnset(c);
+      return `<div class="fxline${unset?" warn":""}">1 <b>${esc(c)}</b> = ${fmtRate(convert(1,c,veh))} ${esc(veh)} <span class="faint">&middot; 1 ${esc(veh)} = ${fmtRate(convert(1,veh,c))} ${esc(c)}</span>`
+        +(unset?` <button type="button" class="fxfetch" data-action="fetch-rates">no live rate &mdash; fetch now</button>`:"")+`</div>`;
     }).join("");
     const legs=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0))).map(l=>{ const a=acctById(l.accountId),c=accCur(a),amt=(l.debit||0)||(l.credit||0);
-      return `<div class="fxleg"><span>${l.debit>0?"Debit":"Credit"} ${esc(a?a.name:"")}</span><span><b>${fmtGroup(amt)} ${esc(c)}</b> → ${money(toBase(amt,c),base())}</span></div>`;
+      return `<div class="fxleg"><span>${l.debit>0?"Debit":"Credit"} ${esc(a?a.name:"")}</span><span><b>${fmtGroup(amt)} ${esc(c)}</b> &rarr; ${money(convert(amt,c,veh),veh)}</span></div>`;
     }).join("");
-    fx=`<div class="balfx"><div class="balfx-msg">Cross-currency entry — each leg is converted to your display currency <b>${esc(base())}</b> through the pivot currency <b>${esc(veh)}</b>, then the ${esc(base())} totals must match. These rates freeze onto the entry when you save.</div>`
-      +`<div class="fxblock"><div class="fxhead">Rates used</div>${rl}</div>`
-      +`<div class="fxblock"><div class="fxhead">Each leg</div>${legs}</div></div>`;
+    fx=`<div class="balfx"><div class="balfx-msg">Cross-currency entry &mdash; each leg is converted to the pivot currency <b>${esc(veh)}</b> (the anchor your rates are quoted in), where debits and credits must match. These rates freeze onto the entry when you save.</div>`
+      +`<div class="fxblock"><div class="fxhead">Rates used (via ${esc(veh)})</div>${rl}</div>`
+      +`<div class="fxblock"><div class="fxhead">Each leg &rarr; ${esc(veh)}</div>${legs}</div></div>`;
   }
   row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""))+(multi?" multi":"");
-  row.innerHTML=`<div class="baltop"><span>Debits <strong class="num">${fmtBal(dr)}</strong> · Credits <strong class="num">${fmtBal(cr)}</strong> <span style="color:var(--faint)">(${base()})</span></span><span class="balverdict">${ok?"✓ Balanced":"Off by "+fmtBal(Math.abs(diff))}</span></div>${fx}`;
+  row.innerHTML=`<div class="baltop"><span>Debits <strong class="num">${money(dr,calc)}</strong> &middot; Credits <strong class="num">${money(cr,calc)}</strong> <span style="color:var(--faint)">(${esc(calc)}${multi?" pivot":""})</span></span><span class="balverdict">${ok?"\u2713 Balanced":"Off by "+money(Math.abs(diff),calc)}</span></div>${fx}`;
   const btn=document.getElementById("save-tx"); if(btn) btn.disabled=!ok;
 }
-
 /* ---- actions ---- */
 /* ---- hash routing: the URL reflects the current view; an account register gets a shareable
    canonical URL (#/account/<id>). Hash (not real paths) so it works on any static host —
