@@ -67,6 +67,15 @@ const snapOf = (e) => process.env.SNAPSHOT_DIR || e.snapshotDir || join(dirname(
 let LEDGER = pathOf(curEntry());
 let SNAPDIR = snapOf(curEntry());
 const useCurrent = () => { const e = curEntry(); LEDGER = pathOf(e); SNAPDIR = snapOf(e); };
+// Latest non-deleted transaction date in a ledger file (YYYY-MM-DD), or null. Read on demand for the list.
+async function lastTxDate(p) {
+  try {
+    const j = JSON.parse(await readFile(p, "utf8"));
+    const txs = j && Array.isArray(j.transactions) ? j.transactions : [];
+    let mx = ""; for (const t of txs) { if (t && !t.deleted && t.date && t.date > mx) mx = t.date; }
+    return mx || null;
+  } catch { return null; }
+}
 
 const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
@@ -118,19 +127,20 @@ createServer(async (req, res) => {
   if (u.pathname === "/api/ledgers") {
     if (req.method === "GET") {
       const ordered = [...cfg.ledgers].sort((a, b) => (a.id === cfg.current ? -1 : b.id === cfg.current ? 1 : (b.lastOpened || 0) - (a.lastOpened || 0))); // current on top, then most-recently-opened
-      return json(res, 200, { ledgersRoot: cfg.ledgersRoot, current: cfg.current, palette: PALETTE, usedColors: cfg.ledgers.map((l) => l.color),
-        ledgers: ordered.map((l) => ({ id: l.id, name: l.name, path: l.path, color: l.color, exists: existsSync(pathOf(l)), current: l.id === cfg.current })) });
+      const ledgers = await Promise.all(ordered.map(async (l) => ({ id: l.id, name: l.name, path: l.path, color: l.color, exists: existsSync(pathOf(l)), current: l.id === cfg.current, lastTx: await lastTxDate(pathOf(l)) })));
+      return json(res, 200, { ledgersRoot: cfg.ledgersRoot, current: cfg.current, palette: PALETTE, usedColors: cfg.ledgers.map((l) => l.color), ledgers });
     }
     if (req.method === "POST") {
       let o = {}; try { o = JSON.parse(await body(req)); } catch {}
       const name = (o.name || "New ledger").trim() || "New ledger";
+      if (cfg.ledgers.some((l) => (l.name || "").trim().toLowerCase() === name.toLowerCase())) return json(res, 409, { error: `A ledger named “${name}” already exists. Pick a different name.` });
       let color = o.color;
       if (color) { if (cfg.ledgers.some((l) => l.color === color)) return json(res, 409, { error: "That colour is already used by another ledger." }); }
       else color = nextColor(cfg.ledgers);
       const root = (o.dir && String(o.dir).startsWith("/")) ? String(o.dir) : cfg.ledgersRoot; // caller may pick a target folder
-      let bn = slug(name), path = join(root, bn + ".json"), n = 1;
-      while (cfg.ledgers.some((l) => l.path === path) || existsSync(path)) path = join(root, bn + "-" + (++n) + ".json");
-      try { await mkdir(dirname(path), { recursive: true }); if (!existsSync(path)) await writeFile(path, "null"); } catch (e) { return json(res, 500, { error: String(e) }); }
+      const path = join(root, slug(name) + ".json"); // filename = the ledger name, no silent -N suffix
+      if (cfg.ledgers.some((l) => l.path === path) || existsSync(path)) return json(res, 409, { error: `A file already exists at ${path}. Pick a different name or folder.` });
+      try { await mkdir(dirname(path), { recursive: true }); await writeFile(path, "null"); } catch (e) { return json(res, 500, { error: String(e) }); }
       const e = { id: uid(), name, path, snapshotDir: join(root, "snapshots", basename(path, ".json")), color, lastOpened: Date.now() };
       cfg.ledgers.push(e); cfg.current = e.id; await saveConfig(cfg); useCurrent();
       return json(res, 200, { ok: true, id: e.id, current: cfg.current });

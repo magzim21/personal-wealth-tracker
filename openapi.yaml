@@ -146,6 +146,7 @@ paths:
                 id: { type: string }
                 name: { type: string }
                 color: { type: string }
+                snapshots: { type: boolean, description: "op=remove only: also delete this ledger's snapshots (the file itself always stays)" }
       responses:
         "200":
           description: Applied
@@ -293,6 +294,7 @@ components:
         color: { type: string, example: "#2f7d5b", description: Unique identity colour }
         exists: { type: boolean }
         current: { type: boolean }
+        lastTx: { type: string, nullable: true, description: Date of the latest transaction in this ledger (YYYY-MM-DD), or null }
     Error:
       type: object
       properties:

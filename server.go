@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -256,6 +255,30 @@ func useCurrent() {
 	}
 }
 
+// lastTxDate returns the latest non-deleted transaction date (YYYY-MM-DD) in a ledger file, or "".
+func lastTxDate(p string) string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	var j struct {
+		Transactions []struct {
+			Date    string `json:"date"`
+			Deleted bool   `json:"deleted"`
+		} `json:"transactions"`
+	}
+	if json.Unmarshal(b, &j) != nil {
+		return ""
+	}
+	mx := ""
+	for _, t := range j.Transactions {
+		if !t.Deleted && t.Date > mx {
+			mx = t.Date
+		}
+	}
+	return mx
+}
+
 func stamp() string { return time.Now().Format("20060102-150405") }
 
 func snapList() []string {
@@ -355,7 +378,7 @@ func main() {
 			led := make([]map[string]any, 0, len(ordered))
 			for i := range ordered {
 				l := &ordered[i]
-				led = append(led, map[string]any{"id": l.ID, "name": l.Name, "path": l.Path, "color": l.Color, "exists": exists(pathOf(l)), "current": l.ID == cfg.Current})
+				led = append(led, map[string]any{"id": l.ID, "name": l.Name, "path": l.Path, "color": l.Color, "exists": exists(pathOf(l)), "current": l.ID == cfg.Current, "lastTx": lastTxDate(pathOf(l))})
 			}
 			writeJSON(w, 200, map[string]any{"ledgersRoot": cfg.LedgersRoot, "current": cfg.Current, "palette": palette, "usedColors": used, "ledgers": led})
 		case http.MethodPost:
@@ -365,6 +388,12 @@ func main() {
 			name := strings.TrimSpace(o.Name)
 			if name == "" {
 				name = "New ledger"
+			}
+			for _, l := range cfg.Ledgers { // refuse a duplicate name instead of appending a suffix
+				if strings.EqualFold(strings.TrimSpace(l.Name), name) {
+					writeJSON(w, 409, map[string]string{"error": "A ledger named “" + name + "” already exists. Pick a different name."})
+					return
+				}
 			}
 			color := o.Color
 			if color != "" {
@@ -381,19 +410,16 @@ func main() {
 			if o.Dir != "" && strings.HasPrefix(o.Dir, "/") { // caller may pick a target folder
 				root = o.Dir
 			}
-			bn := slug(name)
-			p := filepath.Join(root, bn+".json")
-			for n := 1; ; n++ {
-				taken := exists(p)
-				for _, l := range cfg.Ledgers {
-					if l.Path == p {
-						taken = true
-					}
+			p := filepath.Join(root, slug(name)+".json") // filename = the ledger name, no silent -N suffix
+			taken := exists(p)
+			for _, l := range cfg.Ledgers {
+				if l.Path == p {
+					taken = true
 				}
-				if !taken {
-					break
-				}
-				p = filepath.Join(root, bn+"-"+strconv.Itoa(n+1)+".json")
+			}
+			if taken {
+				writeJSON(w, 409, map[string]string{"error": "A file already exists at " + p + ". Pick a different name or folder."})
+				return
 			}
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 				writeJSON(w, 500, map[string]string{"error": err.Error()})
