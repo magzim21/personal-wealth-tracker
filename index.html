@@ -642,6 +642,9 @@ button[data-tip],a[data-tip]{cursor:pointer}
 .balfx-msg{font-size:12px;color:var(--muted);line-height:1.5}
 .fxlink{border:0;background:none;color:var(--accent-ink);font:inherit;font-weight:700;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
 .fxlink:hover{opacity:.8}
+.fxchain{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.sfield.flash{animation:cfgflash 1.2s ease;border-radius:var(--r-sm)}
+@keyframes cfgflash{0%,100%{background:transparent}30%{background:var(--accent-soft)}}
 .fxblock{display:flex;flex-direction:column;gap:2px}
 .fxhead{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:1px}
 .fxline{font-size:12px;color:var(--ink)}
@@ -2129,7 +2132,7 @@ function renderModal(){
         </div>
         <div>
           <div style="${eb}">Advanced</div>
-          <label class="sfield"><span>Vehicle (pivot) currency <span class="infodot" data-tip="Rarely needs changing — leave it on USD. Used only in cross-currency transactions: to convert between two currencies that aren't it, the amount hops through the vehicle. Example: a UAH↔ILS transaction goes UAH→USD→ILS. Not retrospective — only new entries use a changed pivot.">&#9432;</span></span>
+          <label class="sfield" id="cfg-vehicle"><span>Vehicle (pivot) currency <span class="infodot" data-tip="Rarely needs changing — leave it on USD. Used only in cross-currency transactions: to convert between two currencies that aren't it, the amount hops through the vehicle. Example: a UAH↔ILS transaction goes UAH→USD→ILS. Not retrospective — only new entries use a changed pivot.">&#9432;</span></span>
             ${curField("vehicle-pick",vehicle())}
           </label>
           <p class="muted" style="font-size:12px;margin:8px 0 0">The pivot that exchange rates hang off. Most people never touch this.</p>
@@ -2512,33 +2515,18 @@ function updateBal(){
   if(multi) fetchRatesQuiet();   // proactive: any cross-currency entry refreshes the live rates in the background
   let fx="";
   if(multi){
-    // Both hops of the pivot chain matter equally: source to vehicle AND vehicle to destination.
-    // Show each currency against the pivot both ways; never the misleading direct source to destination.
-    const rl=curs.filter(c=>c!==veh).map(c=>{ const unset=rateLooksUnset(c);
-      return `<div class="fxline${unset?" warn":""}">1 <b>${esc(c)}</b> = ${fmtRate(convert(1,c,veh))} ${esc(veh)} <span class="faint">&middot; 1 ${esc(veh)} = ${fmtRate(convert(1,veh,c))} ${esc(c)}</span>`
-        +(unset?` <button type="button" class="fxfetch" data-action="fetch-rates">no live rate &mdash; fetch now</button>`:"")+`</div>`;
-    }).join("");
-    const legs=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0))).map(l=>{ const a=acctById(l.accountId),c=accCur(a),amt=(l.debit||0)||(l.credit||0);
-      // Full path: the raw amount, its value in the pivot, then in your display currency. Skip any hop
-      // that would be an identity (a pivot-currency leg, or a display==pivot book).
-      let chain=`<b>${fmtGroup(amt)} ${esc(c)}</b>`;
-      if(c!==veh) chain+=` &rarr; ${money(convert(amt,c,veh),veh)}`;
-      if(c!==base() && base()!==veh) chain+=` &rarr; ${money(convert(amt,c,base()),base())}`;
-      return `<div class="fxleg"><span>${l.debit>0?"Debit":"Credit"} ${esc(a?a.name:"")}</span><span>${chain}</span></div>`;
-    }).join("");
+    // The whole entry as ONE conversion chain: leg-1 amount, its value in the pivot, leg-2 amount.
+    const ls=d.lines.filter(l=>l.accountId&&((l.debit||0)||(l.credit||0)));
+    const amtOf=l=>(l.debit||0)||(l.credit||0), curOf=l=>accCur(acctById(l.accountId));
+    const chain = ls.length===2
+      ? `<b>${fmtGroup(amtOf(ls[0]))} ${esc(curOf(ls[0]))}</b> &rarr; ${money(convert(amtOf(ls[0]),curOf(ls[0]),veh),veh)} &rarr; <b>${fmtGroup(amtOf(ls[1]))} ${esc(curOf(ls[1]))}</b>`
+      : ls.map(l=>`<b>${fmtGroup(amtOf(l))} ${esc(curOf(l))}</b> &rarr; ${money(convert(amtOf(l),curOf(l),veh),veh)}`).join("<br>");
     const nonVeh=curs.filter(c=>c!==veh);
-    let lead;
-    if(nonVeh.length>=2){
-      const between = nonVeh.length===2
-        ? `direct ${esc(nonVeh[0])} &harr; ${esc(nonVeh[1])} rate`
-        : `direct rate among ${nonVeh.map(esc).join(", ")}`;
-      lead = `There's no ${between}, so this entry balances through the vehicle currency <button type="button" class="fxlink" data-action="fx-settings">${esc(veh)}</button>.`;
-    } else {
-      lead = `This entry balances through the vehicle currency <button type="button" class="fxlink" data-action="fx-settings">${esc(veh)}</button>.`;
-    }
-    fx=`<div class="balfx"><div class="balfx-msg">${lead} These rates freeze onto the entry when you save.</div>`
-      +`<div class="fxblock"><div class="fxhead">Rates used (via ${esc(veh)})</div>${rl}</div>`
-      +`<div class="fxblock"><div class="fxhead">Each leg</div>${legs}</div></div>`;
+    const between = nonVeh.length===2 ? `direct ${esc(nonVeh[0])} &harr; ${esc(nonVeh[1])} rate` : `direct rate among ${nonVeh.map(esc).join(", ")}`;
+    const lead = nonVeh.length>=2
+      ? `There's no ${between}, so this entry balances through the <button type="button" class="fxlink" data-action="fx-settings">vehicle currency</button> ${esc(veh)}.`
+      : `This entry balances through the <button type="button" class="fxlink" data-action="fx-settings">vehicle currency</button> ${esc(veh)}.`;
+    fx=`<div class="balfx"><div class="balfx-msg">${lead} These rates freeze onto the entry when you save.</div><div class="fxchain">${chain}</div></div>`;
   }
   row.className="balrow"+(pristine?" hidden":"")+(ok?" ok":(dr||cr?" bad":""));
   // Only show a "Debits X / Credits Y" total when the whole entry is in ONE currency, where it's the
@@ -2633,7 +2621,8 @@ document.addEventListener("click",e=>{
       const nF=(UI.ledgerAccount?1:0)+((UI.amtOp&&!isNaN(parseFloat(UI.amtVal)))?1:0);
       el.classList.toggle("on", UI.filtersOpen||nF>0); el.setAttribute("aria-expanded",UI.filtersOpen); break; }
     case "open-rates": UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;
-    case "fx-settings": syncLines(); UI.modalStash=UI.modal; UI.rateStatus=""; UI.modal={kind:"rates"}; renderModal(); break;   // open rates from a tx; closing returns to the draft
+    case "fx-settings": { syncLines(); UI.modalStash=UI.modal; UI.orCustom=false; UI.modal={kind:"data"}; renderModal();   // open app Settings from a tx; closing returns to the draft
+      setTimeout(()=>{ const v=document.getElementById("cfg-vehicle"); if(v){ v.scrollIntoView({block:"center",behavior:"smooth"}); v.classList.add("flash"); setTimeout(()=>v.classList.remove("flash"),1200); } },60); break; }
     case "fetch-rates": fetchRates(); break;
     case "open-data": UI.orCustom=false; UI.modal={kind:"data"}; renderModal(); break;
     case "save-location": saveLocation(); break;
