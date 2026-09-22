@@ -720,7 +720,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const round2=n=>Math.round((n+Number.EPSILON)*100)/100;
 const round4=n=>Math.round(n*1e4)/1e4;
 const KEY="ledgerbook.min.v1";
-const VERSION="v60", UPDATED="2026-09-22";
+const VERSION="v59", UPDATED="2026-09-18";  // human-facing release label ONLY — never bumped to trigger a restart. Staleness is detected by the server's own source-file hash (GITINFO.stale), which needs no bump.
 // Stamped at each publish to track drift between this artifact and the git repo:
 const COMMIT="local", COMMITTED=true, MIGRATION_UNCOMMITTED=false;
 const SCHEMA=5;   // data-shape version. A file with a higher number was written by a newer app → refuse to load. (v5: per-account monetary flag)
@@ -2030,11 +2030,12 @@ function renderModal(){
     </div></div>`;
     if(STORE===FILE_STORE) setTimeout(loadLocationInfo,0);
   } else if(UI.modal.kind==="restart"){
-    const sv=UI.modal.serverVer;
     root.innerHTML=`<div class="overlay" data-action="overlay"><div class="modal" style="max-width:440px" role="dialog" aria-modal="true">
       <div class="modal-h"><h3>Restart the local server</h3><button class="iconbtn" data-action="close">${I.x}</button></div>
       <div class="modal-b">
-        <p style="margin:0;font-size:14px;line-height:1.5">This app is <b>${VERSION}</b>, but the running server is <b>${sv?esc(sv):"an older build"}</b>. They must match. Stop the server and start it again from the repo folder, then reload:</p>
+        <p style="margin:0;font-size:14px;line-height:1.5">${UI.modal.stale
+          ? `The running server is <b>behind its code on disk</b> — <b>server.mjs</b> changed after the process started, so the server is stale. Stop it and start it again from the repo folder, then reload:`
+          : `The running server is an <b>older build</b> that can't report its status. Stop it and start it again from the repo folder, then reload:`}</p>
         <pre style="background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-family:var(--fs-mono);font-size:12.5px;margin:0;white-space:pre-wrap;line-height:1.5">node --watch server.mjs   # auto-restart on edits
 node server.mjs           # plain
 go run server.go          # Go</pre>
@@ -3169,7 +3170,12 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
     }
     applyLedgerAccent();
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
-    if(!GITINFO || GITINFO.appVersion!==VERSION || GITINFO.stale){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null, stale:!!(GITINFO&&GITINFO.stale)}; }  // version mismatch OR server source changed since startup → prompt restart
+    // Restart is needed only when the running server no longer matches its source on disk. That's
+    // GITINFO.stale — the server hashes its own source file at startup and compares live, so it fires
+    // automatically on any edit (committed or not) with NO version bump. (!GITINFO = a server too old
+    // to answer /api/version, which is itself stale.) We deliberately do NOT compare the VERSION
+    // string: it's a display label, and a frontend edit is served fresh so it never needs a restart.
+    if(!GITINFO || GITINFO.stale){ UI.modal={kind:"restart", stale:!!(GITINFO&&GITINFO.stale)}; }
   }
   STORE.save(S,"silent");   // persist any migration, but never clobber a file that moved under us at boot
   applyHash();              // honor a shared/bookmarked URL (e.g. #/personal/account/<id>) on first load
