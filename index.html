@@ -870,10 +870,27 @@ function applyPalette(){
   if(isDarkNow()){ r.style.setProperty("--accent",hsl(50,53)); r.style.setProperty("--accent-ink",hsl(50,66)); r.style.setProperty("--accent-soft",hsl(32,16,.55)); }
   else{ r.style.setProperty("--accent",hsl(54,27)); r.style.setProperty("--accent-ink",hsl(60,20)); r.style.setProperty("--accent-soft",hsl(30,92)); }
 }
+function hexHue(hex){ // hue (0..360) of a #rrggbb colour
+  const r=parseInt(hex.slice(1,3),16)/255, g=parseInt(hex.slice(3,5),16)/255, b=parseInt(hex.slice(5,7),16)/255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn; if(!d) return 0;
+  let h; if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4;
+  h*=60; return h<0?h+360:h;
+}
+// The current ledger's identity colour IS the app accent — selecting a ledger recolours the whole app.
+// We take the ledger colour's HUE and run it through the same per-theme shading as the palette system,
+// so it stays legible in light and dark (a raw mid-tone hex would wash out in one of them).
+function applyLedgerAccent(){
+  const r=document.documentElement, c=curLedger()&&curLedger().color;
+  if(!c || !/^#[0-9a-f]{6}$/i.test(c)) return;   // no ledger colour (browser storage / old server) → keep the palette accent
+  const h=Math.round(hexHue(c)), hsl=(s,l,a)=>`hsl(${h} ${s}% ${l}%${a!=null?` / ${a}`:""})`;
+  if(isDarkNow()){ r.style.setProperty("--accent",hsl(50,53)); r.style.setProperty("--accent-ink",hsl(50,66)); r.style.setProperty("--accent-soft",hsl(32,16,.55)); }
+  else{ r.style.setProperty("--accent",hsl(54,27)); r.style.setProperty("--accent-ink",hsl(60,20)); r.style.setProperty("--accent-soft",hsl(30,92)); }
+}
 function applyTheme(){
   const t=(S&&S.settings&&S.settings.theme)||"auto", r=document.documentElement;
   if(t==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",t);
-  applyPalette();   // recompute the accent for whichever theme is now active
+  applyPalette();          // palette accent (browser-storage / no-ledger fallback)
+  applyLedgerAccent();     // …overridden by the current ledger's colour when there is one
 }
 // Body font — experiment-friendly. All choices are system/already-loaded families so nothing is fetched
 // over the network (keeps the app fully offline / local-first).
@@ -1543,14 +1560,14 @@ async function switchLedger(id){
   if(curLedger()&&curLedger().id===id){ dismissModal(); return; }
   try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({op:"switch",id})}); if(!r.ok) throw 0; }
   catch(e){ toast("Couldn't switch ledger."); return; }
-  const ok=await reloadBook(); await loadLedgers();
+  const ok=await reloadBook(); await loadLedgers(); applyLedgerAccent();
   dismissModal(); if(ok){ render(); toast("Now on “"+((curLedger()||{}).name||"ledger")+"”"); }
 }
 async function createLedger(name){
   const nm=(name||"").trim(); if(!nm){ toast("Name the new ledger."); return; }
   try{ const r=await fetch("/api/ledgers",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:nm})}); if(!r.ok) throw 0; }
   catch(e){ toast("Couldn't create the ledger."); return; }
-  await reloadBook(); await loadLedgers(); render(); renderModal(); toast("Created “"+nm+"”");
+  await reloadBook(); await loadLedgers(); applyLedgerAccent(); render(); renderModal(); toast("Created “"+nm+"”");
 }
 async function ledgerOp(op,id,extra){
   try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(Object.assign({op,id},extra||{}))});
@@ -1798,7 +1815,7 @@ function renderModal(){
     const ci=root.querySelector(".lcolorin");
     if(ci){ const hex=document.getElementById("lhex-"+ci.dataset.id);
       ci.addEventListener("input",()=>{ if(hex) hex.textContent=ci.value; });
-      ci.addEventListener("change",()=>{ ledgerOp("color",ci.dataset.id,{color:ci.value}).then(ok=>{ if(ok){ UI.modal.colorFor=null; render(); } renderModal(); }); }); }
+      ci.addEventListener("change",()=>{ ledgerOp("color",ci.dataset.id,{color:ci.value}).then(ok=>{ if(ok){ UI.modal.colorFor=null; applyLedgerAccent(); render(); } renderModal(); }); }); }
     const nn=document.getElementById("lnew-name"), na=document.getElementById("lnew-add");
     const syncAdd=()=>{ if(na) na.disabled=!(nn&&nn.value.trim()); };
     if(nn){ nn.addEventListener("input",syncAdd); nn.addEventListener("keydown",e=>{ if(e.key==="Enter"&&nn.value.trim()){ e.preventDefault(); createLedger(nn.value); } }); }
@@ -1848,8 +1865,10 @@ function renderModal(){
           <div class="sfield"><span>Theme</span>
             <div class="themeseg" role="group" aria-label="Theme">${THEMES.map(([k,l])=>`<button class="${(S.settings.theme||"auto")===k?"on":""}" data-action="set-theme" data-theme="${k}">${l}</button>`).join("")}</div>
           </div>
-          <div class="sfield"><span>Colors</span>
-            <div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>
+          <div class="sfield"><span>Colors ${(LEDGERS&&curLedger())?`<span class="infodot" data-tip="This ledger's identity colour is the app's accent — the same colour shown under the logo and in the Ledgers panel. Each ledger has a different one; a custom colour picker is in that panel.">&#9432;</span>`:""}</span>
+            ${(LEDGERS&&LEDGERS.ledgers&&curLedger())
+              ? `<div class="lpalette" style="padding:0">${(LEDGERS.palette||[]).map(c=>{ const cur=curLedger(), taken=(LEDGERS.usedColors||[]).includes(c)&&cur.color!==c; return `<button class="lsw${cur.color===c?" on":""}" data-action="ledger-color-pick" data-id="${cur.id}" data-color="${esc(c)}" style="background:${esc(c)}"${taken?" disabled":""} title="${taken?"Used by another ledger":esc(c)}"></button>`; }).join("")}</div>`
+              : `<div class="palrow" role="group" aria-label="Color palette">${PALETTES.map(p=>`<button class="palswatch${(S.settings.palette||"evergreen")===p.id?" on":""}" data-action="set-palette" data-pal="${p.id}" data-tip="${p.name}" aria-label="${p.name}" style="--sw:${swatchColor(p.h)}"></button>`).join("")}</div>`}
           </div>
           <label class="sfield"><span>Body font <span class="infodot" data-tip="The body/UI typeface. Every choice is built into your system or already bundled — nothing is downloaded, so it works offline.">&#9432;</span></span>
             <select id="font-pick">${FONTS.map(([id,label,stack])=>`<option value="${id}" ${(S.settings.font||"plex")===id?"selected":""} style="font-family:${escAttr(stack)}">${esc(label)}</option>`).join("")}</select>
@@ -2369,7 +2388,7 @@ document.addEventListener("click",e=>{
     case "ledger-switch": switchLedger(id); break;
     case "ledger-new": createLedger(document.getElementById("lnew-name")?.value); break;
     case "ledger-color-open": UI.modal.colorFor=(UI.modal.colorFor===id?null:id); renderModal(); break;
-    case "ledger-color-pick": ledgerOp("color",id,{color:el.dataset.color}).then(ok=>{ if(ok){ UI.modal.colorFor=null; render(); renderModal(); } }); break;
+    case "ledger-color-pick": ledgerOp("color",id,{color:el.dataset.color}).then(ok=>{ if(ok){ UI.modal.colorFor=null; applyLedgerAccent(); render(); renderModal(); } }); break;
     case "ledger-copy-path": { const pth=el.dataset.path||""; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(pth).then(()=>toast("Path copied"),()=>toast("Couldn't copy")); } else toast("Copy isn't available here"); break; }
     case "ledger-remove": askConfirm("Remove this ledger from the list? Its file stays on disk — you can add it back later via the storage location.", ()=>{ ledgerOp("remove",id).then(async ok=>{ if(ok){ await reloadBook(); render(); renderModal(); toast("Removed from the list."); } }); }); break;
     case "add-line": syncLines(); UI.acctPickOpen=null; UI.modal.draft.lines.push({accountId:"",debit:0,credit:0}); renderModal(); break;
@@ -3057,7 +3076,7 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
   applyFont();
   applyHeadFont();
   if(STORE===FILE_STORE){
-    await loadLedgers();   // multi-book registry (null on an old server → single-ledger look, until they restart)
+    await loadLedgers(); applyLedgerAccent();   // multi-book registry (null on an old server → single-ledger look, until they restart); recolour to the ledger
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
     if(!GITINFO || GITINFO.appVersion!==VERSION){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null}; }  // frontend/backend mismatch → prompt restart
   }
