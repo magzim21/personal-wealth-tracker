@@ -92,7 +92,7 @@ paths:
                 type: object
                 properties:
                   ledgersRoot: { type: string, description: Folder where new ledgers are created }
-                  current: { type: string, description: id of the current ledger }
+                  current: { type: string, description: "id of the default ledger (a fresh client opens this; each client then pins its own ledger via ?ledger on /api/book, and remembers it locally — so 'current' is a default, not a per-client truth)" }
                   palette:
                     type: array
                     items: { type: string, example: "#2f7d5b" }

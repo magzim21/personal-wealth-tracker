@@ -3,6 +3,8 @@
 // proxy exchange-rate lookups when you ask for them.
 //
 // Many ledgers: config.json holds a registry { ledgersRoot, current, ledgers:[{id,name,path,snapshotDir,color}] }.
+// `current` is only the DEFAULT ledger a fresh client opens; each client pins its own ledger per request
+// via ?ledger=<id> on /api/book and remembers it locally, so multiple clients never fight over one "current".
 // The server always reads/writes the CURRENT ledger; /api/ledgers lists, creates, switches, renames, recolours
 // and removes them. A v1 single-ledger config (or a fresh start) is migrated into the registry WITHOUT moving
 // any file. New ledgers are created under ledgersRoot (iCloud Drive when present, else ~/PersonalWealthTracker).
