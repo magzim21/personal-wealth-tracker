@@ -1580,6 +1580,11 @@ let MY_LEDGER=null; try{ MY_LEDGER=localStorage.getItem("pwt.ledgerId")||null; }
 function setMyLedger(id){ MY_LEDGER=id||null; try{ if(id) localStorage.setItem("pwt.ledgerId",id); }catch(e){} }
 const curLedger=()=>{ if(!(LEDGERS&&LEDGERS.ledgers)) return null; const mine=MY_LEDGER&&LEDGERS.ledgers.find(l=>l.id===MY_LEDGER); return mine||LEDGERS.ledgers.find(l=>l.current)||LEDGERS.ledgers[0]; };
 const dirLabel=p=>{ const parts=String(p||"").split("/").filter(Boolean); return parts.length>2?"…/"+parts.slice(-2).join("/"):"/"+parts.join("/"); };
+// The ledger lives in the URL as its (unique) name-slug: #/<ledger>/<view>. Reserved words are views.
+const HASH_VIEWS=["ledger","dashboard","about","account","accounts"];
+const slugify=s=>((s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)||"ledger");
+const ledgerBySlug=sl=>(LEDGERS&&LEDGERS.ledgers)?LEDGERS.ledgers.find(l=>slugify(l.name)===sl):null;
+function viewHash(view,param){ const l=curLedger(); const pre=l?("/"+slugify(l.name)):""; const tail=param?(view+"/"+param):view; return "#"+pre+"/"+tail; }
 // Reload the current ledger's book into S — the load half of boot(), reused when switching.
 async function reloadBook(){
   let loaded=null; try{ loaded=await STORE.load(); }catch(e){}
@@ -1589,13 +1594,17 @@ async function reloadBook(){
   STORE.save(S,"silent");
   return true;
 }
+// Open a ledger for THIS client: mark it default server-side, pin locally, load its book. Shared by the
+// switcher UI and URL navigation.
+async function openLedger(id){
+  try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({op:"switch",id})}); if(!r.ok) throw 0; }
+  catch(e){ toast("Couldn't switch ledger."); return false; }
+  setMyLedger(id); await loadLedgers(); const ok=await reloadBook(); applyLedgerAccent(); return ok;
+}
 async function switchLedger(id){
   if(curLedger()&&curLedger().id===id){ dismissModal(); return; }
-  try{ const r=await fetch("/api/ledgers",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({op:"switch",id})}); if(!r.ok) throw 0; }
-  catch(e){ toast("Couldn't switch ledger."); return; }
-  setMyLedger(id);   // this client is now on `id` (server "current" is just a default)
-  await loadLedgers(); const ok=await reloadBook(); applyLedgerAccent();   // registry first, so the book load is pinned to the NEW ledger id
-  dismissModal(); if(ok){ render(); toast("Now on “"+((curLedger()||{}).name||"ledger")+"”"); }
+  const ok=await openLedger(id); dismissModal();
+  if(ok){ goHash(viewHash(UI.view, UI.view==="account"?encodeURIComponent(UI.accountId):"")); render(); toast("Now on “"+((curLedger()||{}).name||"ledger")+"”"); }
 }
 async function createLedger(name,dir){
   const nm=(name||"").trim(); if(!nm){ toast("Name the new ledger."); return; }
@@ -2344,16 +2353,23 @@ function updateBal(){
    canonical URL (#/account/<id>). Hash (not real paths) so it works on any static host —
    local server, the Claude artifact, and GitHub Pages — with no server-side rewrites. ---- */
 function applyHash(){
-  const parts=(location.hash||"").replace(/^#\/?/,"").split("/");
-  if(parts[0]==="ledger"){ UI.view="ledger"; }
-  else if(parts[0]==="dashboard"){ UI.view="dashboard"; }
-  else if(parts[0]==="about"){ UI.view="about"; }
-  else if(parts[0]==="account"&&parts[1]){ const id=decodeURIComponent(parts[1]); if(acctById(id)){ UI.view="account"; UI.accountId=id; } else { UI.view="accounts"; } }
-  else if(parts[0]==="accounts"){ UI.view="accounts"; }
+  let parts=(location.hash||"").replace(/^#\/?/,"").split("/").filter(Boolean);
+  if(parts[0] && !HASH_VIEWS.includes(parts[0]) && ledgerBySlug(parts[0])) parts=parts.slice(1);   // strip a leading ledger slug
+  const v=parts[0];
+  if(v==="ledger"){ UI.view="ledger"; }
+  else if(v==="dashboard"){ UI.view="dashboard"; }
+  else if(v==="about"){ UI.view="about"; }
+  else if(v==="account"&&parts[1]){ const id=decodeURIComponent(parts[1]); if(acctById(id)){ UI.view="account"; UI.accountId=id; } else { UI.view="accounts"; } }
+  else if(v==="accounts"){ UI.view="accounts"; }
   else { UI.view=UI.homeView||"accounts"; }   // a bare URL opens your chosen homepage
 }
 function goHash(h){ if(location.hash===h){ render(); } else { location.hash=h; } } // set URL → hashchange re-renders; force a render if it's already there
-window.addEventListener("hashchange",()=>{ applyHash(); render(); });
+window.addEventListener("hashchange",async()=>{
+  // a different ledger slug in the URL → open that ledger (async), then honor the view
+  const first=(location.hash||"").replace(/^#\/?/,"").split("/").filter(Boolean)[0];
+  if(first && !HASH_VIEWS.includes(first)){ const led=ledgerBySlug(first); if(led && curLedger() && led.id!==curLedger().id){ await openLedger(led.id); applyHash(); render(); return; } }
+  applyHash(); render();
+});
 document.addEventListener("click",e=>{
   // Privacy Mode: with amounts blurred, a click on any number reveals just that one (for screenshots).
   if(UI.privacy){ const amt=e.target.closest(".cnt,td.num,.txsum,.netnum,.dtile b,.barrow .bv,.regbal b,.regbal-sub,.dleg-amt,.sub,.tcount"); if(amt){ amt.classList.toggle("revealed"); return; } }
@@ -2366,8 +2382,8 @@ document.addEventListener("click",e=>{
       const app=document.querySelector(".app"); if(app) app.classList.toggle("rail-collapsed", UI.railCollapsed);
       if(app){ const t=app.querySelector(".railtoggle"); if(t){ t.setAttribute("aria-label",UI.railCollapsed?"Show widgets":"Hide widgets"); t.setAttribute("data-tip",UI.railCollapsed?"Show the widget panel":"Hide the widget panel"); } }
       break; }
-    case "tab": goHash("#/"+el.dataset.view); break;
-    case "go-home": goHash("#/"+(UI.homeView||"accounts")); break;
+    case "tab": goHash(viewHash(el.dataset.view)); break;
+    case "go-home": goHash(viewHash(UI.homeView||"accounts")); break;
     case "set-home": UI.homeView=el.dataset.view; saveUIPrefs(); toast(`Homepage set to ${el.dataset.view.charAt(0).toUpperCase()+el.dataset.view.slice(1)}`); render(); break;
     case "set-theme": S.settings.theme=el.dataset.theme; applyTheme(); save(); render(); renderModal(); break;
     case "set-palette": S.settings.palette=el.dataset.pal; applyPalette(); save(); render(); renderModal(); break;
@@ -2398,7 +2414,7 @@ document.addEventListener("click",e=>{
     case "sub-create": subCreate(); break;
     case "sub-close": UI.sub=null; renderModal(); break;
     case "suboverlay": if(e.target===el){ UI.sub=null; renderModal(); } break;
-    case "open-account": goHash("#/account/"+encodeURIComponent(id)); break;
+    case "open-account": goHash(viewHash("account",encodeURIComponent(id))); break;
     case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; UI.amtOp=""; UI.amtVal=""; render(); break;
     case "ledger-mode": UI.ledgerMode=el.dataset.mode; render(); break;
@@ -2482,7 +2498,7 @@ document.addEventListener("click",e=>{
   }
 });
 document.addEventListener("keydown",e=>{
-  if((e.key==="Enter"||e.key===" ")&&e.target&&e.target.closest&&e.target.closest('[data-action="go-home"]')){ e.preventDefault(); goHash("#/"+(UI.homeView||"accounts")); return; }   // logo → homepage
+  if((e.key==="Enter"||e.key===" ")&&e.target&&e.target.closest&&e.target.closest('[data-action="go-home"]')){ e.preventDefault(); goHash(viewHash(UI.homeView||"accounts")); return; }   // logo → homepage
   if(UI.sub){ if(e.key==="Escape"){ UI.sub=null; renderModal(); } else if(e.key==="Enter"){ e.preventDefault(); subCreate(); } return; }   // sub-modal takes keys first
   if(!UI.modal) return;
   if(e.key==="Escape" && UI.acctPickOpen!=null){ closeAcctPanel(); return; }   // Esc closes an open account picker first, not the whole modal
@@ -3125,16 +3141,20 @@ try{ document.documentElement.setAttribute("translate","no"); document.body.setA
   applyHeadFont();
   if(STORE===FILE_STORE){
     await loadLedgers();   // multi-book registry (null on an old server → single-ledger look, until they restart)
-    if(LEDGERS&&LEDGERS.ledgers){   // reconcile THIS client's remembered ledger with the registry
-      if(!(MY_LEDGER&&LEDGERS.ledgers.some(l=>l.id===MY_LEDGER))) setMyLedger((LEDGERS.ledgers.find(l=>l.current)||LEDGERS.ledgers[0]||{}).id);
-      else if(MY_LEDGER!==LEDGERS.current) await reloadBook();   // I last used a different ledger than the server default → load mine
+    if(LEDGERS&&LEDGERS.ledgers){   // pick THIS client's ledger: URL slug wins, then localStorage, then the server default
+      const first=(location.hash||"").replace(/^#\/?/,"").split("/").filter(Boolean)[0];
+      const hashLed=(first && !HASH_VIEWS.includes(first))?ledgerBySlug(first):null;
+      const targetId=(hashLed&&hashLed.id) || (MY_LEDGER&&LEDGERS.ledgers.some(l=>l.id===MY_LEDGER)?MY_LEDGER:null) || LEDGERS.current || (LEDGERS.ledgers[0]||{}).id;
+      setMyLedger(targetId);
+      if(targetId && targetId!==LEDGERS.current) await reloadBook();   // initial load was the server default → load the client's ledger if different
     }
     applyLedgerAccent();
     try{ GITINFO=await (await fetch("/api/version",{cache:"no-store"})).json(); }catch(e){ GITINFO=null; }
     if(!GITINFO || GITINFO.appVersion!==VERSION){ UI.modal={kind:"restart", serverVer:(GITINFO&&GITINFO.appVersion)||null}; }  // frontend/backend mismatch → prompt restart
   }
   STORE.save(S,"silent");   // persist any migration, but never clobber a file that moved under us at boot
-  applyHash();              // honor a shared/bookmarked URL (e.g. #/account/<id>) on first load
+  applyHash();              // honor a shared/bookmarked URL (e.g. #/personal/account/<id>) on first load
+  try{ if(curLedger()) history.replaceState(null,"",location.pathname+viewHash(UI.view, UI.view==="account"?encodeURIComponent(UI.accountId):"")); }catch(_){}   // canonicalize: put the ledger in the URL
   render();
   renderModal();
 })();
