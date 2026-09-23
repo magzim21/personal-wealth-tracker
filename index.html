@@ -437,6 +437,9 @@ tfoot td{font-weight:600;border-top:1px solid var(--line-strong)}
 .txcard table.txlines th.acct{text-align:left}
 .txcard table.txlines .num{white-space:nowrap;min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
 .txcard table.txlines .lnative{font-family:var(--fs-mono);font-size:11px;color:var(--faint);white-space:nowrap;margin-left:6px}
+.txcard table.txlines .lcur{font-family:var(--fs-mono);font-size:10px;color:var(--faint);margin-left:5px}
+.repchk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;white-space:nowrap;user-select:none}
+.repchk input{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer}
 .txcard table.txlines tbody tr:first-child td{padding-top:6px}
 .txcard table.txlines tr:last-child td{padding-bottom:8px}
 .txnote{padding:7px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;white-space:pre-wrap}
@@ -950,8 +953,8 @@ function verInfo(){
 }
 const UI={view:"accounts",modal:null,ledgerSort:"date-desc",ledgerQuery:"",ledgerAccount:"",collapsed:{}};
 const UIKEY="ledgerbook.ui";   // view prefs kept OUT of the ledger (so they don't trigger snapshots)
-function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===true) UI.fxRail=true; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; if(p&&p.railCollapsed===true) UI.railCollapsed=true; } }catch(e){} }
-function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail===true,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||"",railCollapsed:UI.railCollapsed===true})); }catch(e){} }
+function loadUIPrefs(){ try{ const r=localStorage.getItem(UIKEY); if(r){ const p=JSON.parse(r); if(p&&p.collapsed&&typeof p.collapsed==="object") UI.collapsed=p.collapsed; if(p&&p.homeView) UI.homeView=p.homeView; if(p&&p.privacy) UI.privacy=true; if(p&&p.fxRail===true) UI.fxRail=true; if(p&&p.debtClock===true) UI.debtClock=true; if(p&&p.debtCountry) UI.debtCountry=p.debtCountry; if(p&&p.railCollapsed===true) UI.railCollapsed=true; if(p&&p.txReporting===true) UI.txReporting=true; } }catch(e){} }
+function saveUIPrefs(){ try{ localStorage.setItem(UIKEY, JSON.stringify({collapsed:UI.collapsed,homeView:UI.homeView,privacy:!!UI.privacy,fxRail:UI.fxRail===true,debtClock:UI.debtClock===true,debtCountry:UI.debtCountry||"",railCollapsed:UI.railCollapsed===true,txReporting:UI.txReporting===true})); }catch(e){} }
 const LEDGER_SORTS=[["date-desc","Date (newest first)"],["date-asc","Date (oldest first)"],["added-desc","Recently added"],["amount-desc","Amount (high → low)"],["amount-asc","Amount (low → high)"],["alpha","Description (A → Z)"]];
 function normalizeState(){
   if(!Array.isArray(S.types)) S.types=[];
@@ -1516,6 +1519,7 @@ function viewLedger(){
     <div class="lfilters">${modeSeg}
       <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
       <button class="btn sm filterbtn${(UI.filtersOpen||nFilters)?" on":""}" data-action="toggle-filters" title="Filters" aria-expanded="${!!UI.filtersOpen}">${I.filter}<span>Filters</span>${nFilters?`<span class="fbadge">${nFilters}</span>`:""}</button>
+      ${mode==="entries"?`<label class="repchk" title="Show debit and credit converted to ${esc(base())}. Off: the amounts as you entered them, in each account's own currency."><input type="checkbox" data-action="toggle-tx-reporting" ${UI.txReporting?"checked":""}><span>In ${esc(base())}</span></label>`:""}
       ${active?`<span class="lcount">${count} of ${total}</span>`:""}
     </div>
     ${mode==="entries"
@@ -1537,9 +1541,11 @@ function renderTxCard(t){
     </div>
     <table class="txlines">
       <thead><tr><th class="acct"></th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
-      <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);const bv=lineBaseVal(t,l);
-        const native=c!==base()?` <span class="lnative">${fmtGroup(amt)} ${esc(c)}</span>`:"";
-        return `<tr><td class="acct">${a?esc(a.name):"—"}${native}</td><td class="num dr">${isDr?money(bv,base()):""}</td><td class="num cr">${isDr?"":money(bv,base())}</td></tr>`;}).join("")}</tbody>
+      <tbody>${t.lines.map(l=>{const a=acctById(l.accountId);const c=accCur(a);const isDr=(l.debit||0)>0;const amt=isDr?(l.debit||0):(l.credit||0);
+        let cell, native="";
+        if(UI.txReporting){ cell=money(lineBaseVal(t,l),base()); native=c!==base()?` <span class="lnative">${fmtGroup(amt)} ${esc(c)}</span>`:""; }
+        else { cell=`${fmtGroup(amt)}${c!==base()?` <span class="lcur">${esc(c)}</span>`:""}`; }
+        return `<tr><td class="acct">${a?esc(a.name):"\u2014"}${native}</td><td class="num dr">${isDr?cell:""}</td><td class="num cr">${isDr?"":cell}</td></tr>`;}).join("")}</tbody>
     </table>
     ${t.comment?`<div class="txnote">${esc(t.comment)}</div>`:""}
   </div>`;
@@ -2654,6 +2660,7 @@ document.addEventListener("click",e=>{
     case "open-account": goHash(viewHash("account",encodeURIComponent(id))); break;
     case "reg-expand": { const set=UI.regExpanded||(UI.regExpanded=new Set()); if(set.has(id)) set.delete(id); else set.add(id); render(); break; }
     case "ledger-clear": UI.ledgerQuery=""; UI.ledgerAccount=""; UI.amtOp=""; UI.amtVal=""; render(); break;
+    case "toggle-tx-reporting": UI.txReporting=!UI.txReporting; saveUIPrefs(); render(); break;
     case "ledger-mode": UI.ledgerMode=el.dataset.mode; render(); break;
     case "toggle-filters": { UI.filtersOpen=!UI.filtersOpen;   // toggle the class (no full re-render) so the panel eases open/closed
       const fp=document.querySelector(".filterpanel"); if(fp) fp.classList.toggle("open",UI.filtersOpen);
