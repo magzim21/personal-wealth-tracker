@@ -1519,7 +1519,7 @@ function viewLedger(){
     <div class="lfilters">${modeSeg}
       <input id="ledger-q" class="lsearch" type="search" placeholder="Search…" value="${escAttr(UI.ledgerQuery||"")}" autocomplete="off">
       <button class="btn sm filterbtn${(UI.filtersOpen||nFilters)?" on":""}" data-action="toggle-filters" title="Filters" aria-expanded="${!!UI.filtersOpen}">${I.filter}<span>Filters</span>${nFilters?`<span class="fbadge">${nFilters}</span>`:""}</button>
-      ${mode==="entries"?`<label class="repchk" title="Show debit and credit converted to ${esc(base())}. Off: the amounts as you entered them, in each account's own currency."><input type="checkbox" data-action="toggle-tx-reporting" ${UI.txReporting?"checked":""}><span>In ${esc(base())}</span></label>`:""}
+      ${mode==="entries"?`<label class="repchk" title="On: every leg converted to ${esc(base())} so the debit and credit columns tally. Off: the amounts as you entered them, in each account's own currency."><input type="checkbox" data-action="toggle-tx-reporting" ${UI.txReporting?"checked":""}><span>Convert currencies</span></label>`:""}
       ${active?`<span class="lcount">${count} of ${total}</span>`:""}
     </div>
     ${mode==="entries"
